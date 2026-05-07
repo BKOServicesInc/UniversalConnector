@@ -1,0 +1,43 @@
+connectorId: pg-orders
+sourceType: postgres
+description: Orders database — Postgres WAL CDC
+enabled: true
+
+connection:
+  host: "localhost"
+  port: 5432
+  database: "ordersdb"
+  username: "postgres"
+  password: "12345"
+
+changeDetection:
+  mode: cdc
+  replicationSlot: uc_slot
+  publication: uc_pub
+
+watch:
+  autoDiscover: false
+  entities:
+    - name: public.orders
+      primaryKey: [id]
+    - name: public.order_items
+      primaryKey: [id]
+
+fieldMapping:
+  - source: internal_note
+    exclude: true
+  - source: created_at
+    type: timestamp
+  - source: updated_at
+    type: timestamp
+
+nats:
+  subjectOverride: orders-changes
+  additionalHeaders:
+    domain: order-management
+
+resilience:
+  maxConsecutiveFailures: 5
+  retryDelaySeconds: 10
+  backoffMultiplier: 1.5
+  maxRetryDelaySeconds: 120

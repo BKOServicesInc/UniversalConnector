@@ -1,0 +1,37 @@
+connectorId: sap-s4hana
+sourceType: sap
+description: SAP S/4HANA OData delta feed
+enabled: false
+
+connection:
+  baseUrl: "${SAP_BASE_URL}"
+  username: "${SAP_USER}"
+  password: "${SAP_PASSWORD}"
+  sapClient: "${SAP_CLIENT}"
+
+changeDetection:
+  mode: delta
+  pollIntervalSeconds: 60
+
+watch:
+  autoDiscover: false
+  entities:
+    - name: API_SALES_ORDER_SRV/A_SalesOrder
+      primaryKey: [SalesOrder]
+    - name: API_MATERIAL_STOCK_SRV/A_MatlStkInAcctMod
+      primaryKey: [Material, Plant]
+
+fieldMapping:
+  - source: LastChangeDateTime
+    type: timestamp
+    target: updatedAt
+
+nats:
+  subjectOverride: sap-changes
+  additionalHeaders:
+    domain: erp
+
+resilience:
+  maxConsecutiveFailures: 5
+  retryDelaySeconds: 30
+  backoffMultiplier: 2.0

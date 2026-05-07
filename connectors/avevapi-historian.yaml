@@ -1,0 +1,33 @@
+connectorId: avevapi-historian
+sourceType: avevapi
+description: AVEVA PI Web API recorded values
+enabled: false
+
+connection:
+  baseUrl: "${PI_BASE_URL}"
+  piServerName: "${PI_SERVER_NAME}"
+  username: "${PI_USER}"
+  password: "${PI_PASSWORD}"
+  verifySsl: false
+
+changeDetection:
+  mode: polling
+  pollIntervalSeconds: 30
+  lookbackDuration: PT1H
+
+watch:
+  autoDiscover: false
+  entities:
+    - name: "${PI_TAG_WEBID_FLOW}"
+      primaryKey: [webId]
+    - name: "${PI_TAG_WEBID_LEVEL}"
+      primaryKey: [webId]
+
+nats:
+  subjectOverride: historian-changes
+  additionalHeaders:
+    domain: process-control
+
+resilience:
+  maxConsecutiveFailures: 5
+  retryDelaySeconds: 10

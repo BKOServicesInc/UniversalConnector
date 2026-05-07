@@ -1,0 +1,16 @@
+﻿{
+  "$schema": "https://json.schemastore.org/launchsettings.json",
+  "profiles": {
+    "UniversalConnector.Host": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "environmentVariables": {
+        "DOTNET_ENVIRONMENT": "Development",
+        "Nats__Servers__0": "nats://localhost:4222",
+        "GenericConnector__DescriptorDirectory": "connectors",
+        "GenericConnector__FailOnDescriptorError": "false",
+        "PostgresSink__ConnectionString": "Host=localhost;Port=5432;Database=cdcdb;Username=postgres;Password=12345"
+      }
+    }
+  }
+}

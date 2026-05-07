@@ -1,0 +1,39 @@
+connectorId: sqlserver-crm
+sourceType: sqlserver
+description: CRM database — SQL Server Change Tracking
+enabled: true
+
+connection:
+  host: "(localdb)\\MSSQLLocalDB"
+  database: "crmdb"
+  username: "connector"
+  password: "YourStrongPassword123!"
+
+changeDetection:
+  mode: cdc
+  pollIntervalSeconds: 15
+  autoEnableChangeTracking: true
+
+watch:
+  autoDiscover: false
+  entities:
+    - name: dbo.Customers
+      primaryKey: [CustomerId]
+    - name: dbo.Contacts
+      primaryKey: [ContactId]
+
+fieldMapping:
+  - source: SSN
+    exclude: true
+  - source: ModifiedDate
+    type: timestamp
+    target: updatedAt
+
+nats:
+  subjectOverride: crm-changes
+  additionalHeaders:
+    domain: customer-management
+
+resilience:
+  maxConsecutiveFailures: 5
+  retryDelaySeconds: 15

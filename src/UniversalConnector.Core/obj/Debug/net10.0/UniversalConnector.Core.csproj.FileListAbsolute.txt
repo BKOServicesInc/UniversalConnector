@@ -1,0 +1,12 @@
+C:\Repos\UniversalConnector\src\UniversalConnector.Core\bin\Debug\net10.0\UniversalConnector.Core.deps.json
+C:\Repos\UniversalConnector\src\UniversalConnector.Core\bin\Debug\net10.0\UniversalConnector.Core.dll
+C:\Repos\UniversalConnector\src\UniversalConnector.Core\bin\Debug\net10.0\UniversalConnector.Core.pdb
+C:\Repos\UniversalConnector\src\UniversalConnector.Core\obj\Debug\net10.0\UniversalConnector.Core.csproj.AssemblyReference.cache
+C:\Repos\UniversalConnector\src\UniversalConnector.Core\obj\Debug\net10.0\UniversalConnector.Core.GeneratedMSBuildEditorConfig.editorconfig
+C:\Repos\UniversalConnector\src\UniversalConnector.Core\obj\Debug\net10.0\UniversalConnector.Core.AssemblyInfoInputs.cache
+C:\Repos\UniversalConnector\src\UniversalConnector.Core\obj\Debug\net10.0\UniversalConnector.Core.AssemblyInfo.cs
+C:\Repos\UniversalConnector\src\UniversalConnector.Core\obj\Debug\net10.0\UniversalConnector.Core.csproj.CoreCompileInputs.cache
+C:\Repos\UniversalConnector\src\UniversalConnector.Core\obj\Debug\net10.0\UniversalConnector.Core.dll
+C:\Repos\UniversalConnector\src\UniversalConnector.Core\obj\Debug\net10.0\refint\UniversalConnector.Core.dll
+C:\Repos\UniversalConnector\src\UniversalConnector.Core\obj\Debug\net10.0\UniversalConnector.Core.pdb
+C:\Repos\UniversalConnector\src\UniversalConnector.Core\obj\Debug\net10.0\ref\UniversalConnector.Core.dll

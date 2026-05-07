@@ -1,0 +1,53 @@
+using Microsoft.Extensions.DependencyInjection;
+using UniversalConnector.Core.Abstractions;
+using UniversalConnector.Core.Descriptors;
+using UniversalConnector.Generic.Adapters;
+using UniversalConnector.Generic.Configuration;
+using UniversalConnector.Generic.Engine;
+using UniversalConnector.Generic.Mapping;
+
+namespace UniversalConnector.Generic.Extensions;
+
+public static class GenericConnectorExtensions
+{
+    public static IServiceCollection AddGenericConnector(
+        this IServiceCollection services,
+        Action<GenericConnectorOptions>? configure = null)
+    {
+        if (configure is not null)
+            services.Configure(configure);
+        else
+            services.AddOptions<GenericConnectorOptions>();
+
+        services.AddSingleton<DescriptorValidator>();
+        services.AddSingleton<IDescriptorLoader, DescriptorLoader>();
+        services.AddSingleton<DescriptorStore>();
+        services.AddSingleton<FieldMapper>();
+        services.AddSingleton<AdapterRegistry>();
+
+        // Protocol adapters
+        services.AddSingleton<IProtocolAdapter, PostgresAdapter>();
+        services.AddSingleton<IProtocolAdapter, SqlServerAdapter>();
+        services.AddSingleton<IProtocolAdapter, Neo4jAdapter>();
+        services.AddSingleton<IProtocolAdapter, DatabricksAdapter>();
+        services.AddSingleton<IProtocolAdapter, MongoDbAdapter>();
+
+        // HTTP-based adapters registered with distinct source type names
+        services.AddSingleton<IProtocolAdapter>(sp =>
+            new HttpRestAdapter(sp.GetRequiredService<Microsoft.Extensions.Logging.ILoggerFactory>(), "sharepoint"));
+        services.AddSingleton<IProtocolAdapter>(sp =>
+            new HttpRestAdapter(sp.GetRequiredService<Microsoft.Extensions.Logging.ILoggerFactory>(), "sap"));
+        services.AddSingleton<IProtocolAdapter>(sp =>
+            new HttpRestAdapter(sp.GetRequiredService<Microsoft.Extensions.Logging.ILoggerFactory>(), "seeq"));
+        services.AddSingleton<IProtocolAdapter>(sp =>
+            new HttpRestAdapter(sp.GetRequiredService<Microsoft.Extensions.Logging.ILoggerFactory>(), "avevapi"));
+
+        // Bootstrap service (runs before ConnectorPipelineService)
+        services.AddHostedService<DescriptorBootstrapService>();
+
+        // Generic factory fallback (sourceType = "*")
+        services.AddSingleton<IConnectorFactory, MultiSourceGenericFactory>();
+
+        return services;
+    }
+}

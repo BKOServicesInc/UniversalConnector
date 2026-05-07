@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dotnet --version)",
+      "Bash(dotnet new *)",
+      "Bash(dotnet sln *)",
+      "Bash(dotnet add *)",
+      "Bash(dotnet build *)",
+      "Bash(Rename-Item \"C:\\\\Repos\\\\UniversalConnector\\\\src\\\\UniversalConnector.Core\\\\Abstractions\\\\IKafkaPublisher.cs\" \"INatsPublisher.cs\")",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:hub.docker.com)"
+    ]
+  }
+}

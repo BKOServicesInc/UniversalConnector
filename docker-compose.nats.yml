@@ -1,0 +1,94 @@
+services:
+  nats:
+    image: nats:alpine
+    command: ["-js", "-m", "8222"]
+    # -js  = enable JetStream (persistent messaging, retained subjects)
+    # -m   = enable HTTP monitoring on port 8222 (used by NUI and nats-dashboard)
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8222/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    ports:
+      - "4222:4222"    # client connections
+      - "8222:8222"    # HTTP monitoring
+    networks:
+      - nats-net
+    restart: unless-stopped
+
+  nui:
+    # NUI — full NATS management UI (publish, subscribe, JetStream, KV)
+    # On first launch: open http://localhost:31311 and add server nats://nats:4222
+    image: ghcr.io/nats-nui/nui:latest
+    depends_on:
+      nats:
+        condition: service_healthy
+    ports:
+      - "31311:31311"  # web UI → http://localhost:31311
+    volumes:
+      - nui-data:/db   # persists saved server connections
+    networks:
+      - nats-net
+    restart: unless-stopped
+
+  nats-box:
+    image: natsio/nats-box
+    entrypoint: ["tail", "-f", "/dev/null"]   # keep alive for docker exec
+    networks:
+      - nats-net
+
+  mongo:
+    image: mongo:7
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - nats-net
+    restart: unless-stopped
+
+  mongo-express:
+    image: mongo-express
+    environment:
+      ME_CONFIG_MONGODB_URL: mongodb://mongo:27017/
+      ME_CONFIG_BASICAUTH: "false"
+    depends_on:
+      mongo:
+        condition: service_healthy
+    ports:
+      - "8081:8081"    # web UI → http://localhost:8081
+    networks:
+      - nats-net
+    restart: unless-stopped
+
+  neo4j:
+    image: neo4j:5
+    environment:
+      NEO4J_AUTH: neo4j/YourStrongPassword123!
+    volumes:
+      - neo4j-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:7474 || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    networks:
+      - nats-net
+    restart: unless-stopped
+
+networks:
+  nats-net:
+    driver: bridge
+
+volumes:
+  neo4j-data:
+  nui-data:
+  mongo-data:

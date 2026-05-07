@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "dgSpecHash": "8G8wsfPENpo=",
+  "success": true,
+  "projectFilePath": "C:\\Repos\\UniversalConnector\\src\\UniversalConnector.Core\\UniversalConnector.Core.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\LuisMartinez\\.nuget\\packages\\microsoft.extensions.dependencyinjection.abstractions\\10.0.7\\microsoft.extensions.dependencyinjection.abstractions.10.0.7.nupkg.sha512",
+    "C:\\Users\\LuisMartinez\\.nuget\\packages\\microsoft.extensions.logging.abstractions\\10.0.7\\microsoft.extensions.logging.abstractions.10.0.7.nupkg.sha512",
+    "C:\\Users\\LuisMartinez\\.nuget\\packages\\yamldotnet\\17.1.0\\yamldotnet.17.1.0.nupkg.sha512"
+  ],
+  "logs": []
+}

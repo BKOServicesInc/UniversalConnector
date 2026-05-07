@@ -1,0 +1,38 @@
+connectorId: sharepoint-docs
+sourceType: sharepoint
+description: SharePoint document library delta feed
+enabled: false
+
+connection:
+  tenantId: "${SHAREPOINT_TENANT_ID}"
+  clientId: "${SHAREPOINT_CLIENT_ID}"
+  clientSecret: "${SHAREPOINT_CLIENT_SECRET}"
+  baseUrl: "https://graph.microsoft.com/v1.0/sites/${SHAREPOINT_SITE_ID}"
+
+changeDetection:
+  mode: delta
+  pollIntervalSeconds: 120
+
+watch:
+  autoDiscover: false
+  entities:
+    - name: Documents
+      primaryKey: [id]
+    - name: Announcements
+      primaryKey: [id]
+
+fieldMapping:
+  - source: createdBy
+    exclude: true
+  - source: lastModifiedDateTime
+    type: timestamp
+    target: updatedAt
+
+nats:
+  subjectOverride: sharepoint-changes
+  additionalHeaders:
+    domain: collaboration
+
+resilience:
+  maxConsecutiveFailures: 5
+  retryDelaySeconds: 30

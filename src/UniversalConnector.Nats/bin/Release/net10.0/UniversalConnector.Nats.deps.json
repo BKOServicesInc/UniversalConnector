@@ -1,0 +1,393 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v10.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v10.0": {
+      "UniversalConnector.Nats/1.0.0": {
+        "dependencies": {
+          "Microsoft.Extensions.Logging.Abstractions": "10.0.7",
+          "Microsoft.Extensions.Options": "10.0.7",
+          "NATS.Net": "2.7.3",
+          "UniversalConnector.Core": "1.0.0"
+        },
+        "runtime": {
+          "UniversalConnector.Nats.dll": {}
+        }
+      },
+      "Microsoft.Extensions.Configuration.Abstractions/8.0.0": {
+        "dependencies": {
+          "Microsoft.Extensions.Primitives": "10.0.7"
+        },
+        "runtime": {
+          "lib/net8.0/Microsoft.Extensions.Configuration.Abstractions.dll": {
+            "assemblyVersion": "8.0.0.0",
+            "fileVersion": "8.0.23.53103"
+          }
+        }
+      },
+      "Microsoft.Extensions.DependencyInjection.Abstractions/10.0.7": {
+        "runtime": {
+          "lib/net10.0/Microsoft.Extensions.DependencyInjection.Abstractions.dll": {
+            "assemblyVersion": "10.0.0.0",
+            "fileVersion": "10.0.726.21808"
+          }
+        }
+      },
+      "Microsoft.Extensions.Diagnostics.Abstractions/8.0.0": {
+        "dependencies": {
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.7",
+          "Microsoft.Extensions.Options": "10.0.7"
+        },
+        "runtime": {
+          "lib/net8.0/Microsoft.Extensions.Diagnostics.Abstractions.dll": {
+            "assemblyVersion": "8.0.0.0",
+            "fileVersion": "8.0.23.53103"
+          }
+        }
+      },
+      "Microsoft.Extensions.FileProviders.Abstractions/8.0.0": {
+        "dependencies": {
+          "Microsoft.Extensions.Primitives": "10.0.7"
+        },
+        "runtime": {
+          "lib/net8.0/Microsoft.Extensions.FileProviders.Abstractions.dll": {
+            "assemblyVersion": "8.0.0.0",
+            "fileVersion": "8.0.23.53103"
+          }
+        }
+      },
+      "Microsoft.Extensions.Hosting.Abstractions/8.0.0": {
+        "dependencies": {
+          "Microsoft.Extensions.Configuration.Abstractions": "8.0.0",
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.7",
+          "Microsoft.Extensions.Diagnostics.Abstractions": "8.0.0",
+          "Microsoft.Extensions.FileProviders.Abstractions": "8.0.0",
+          "Microsoft.Extensions.Logging.Abstractions": "10.0.7"
+        },
+        "runtime": {
+          "lib/net8.0/Microsoft.Extensions.Hosting.Abstractions.dll": {
+            "assemblyVersion": "8.0.0.0",
+            "fileVersion": "8.0.23.53103"
+          }
+        }
+      },
+      "Microsoft.Extensions.Logging.Abstractions/10.0.7": {
+        "dependencies": {
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.7"
+        },
+        "runtime": {
+          "lib/net10.0/Microsoft.Extensions.Logging.Abstractions.dll": {
+            "assemblyVersion": "10.0.0.0",
+            "fileVersion": "10.0.726.21808"
+          }
+        }
+      },
+      "Microsoft.Extensions.Options/10.0.7": {
+        "dependencies": {
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.7",
+          "Microsoft.Extensions.Primitives": "10.0.7"
+        },
+        "runtime": {
+          "lib/net10.0/Microsoft.Extensions.Options.dll": {
+            "assemblyVersion": "10.0.0.0",
+            "fileVersion": "10.0.726.21808"
+          }
+        }
+      },
+      "Microsoft.Extensions.Primitives/10.0.7": {
+        "runtime": {
+          "lib/net10.0/Microsoft.Extensions.Primitives.dll": {
+            "assemblyVersion": "10.0.0.0",
+            "fileVersion": "10.0.726.21808"
+          }
+        }
+      },
+      "NATS.Client.Abstractions/2.7.3": {
+        "runtime": {
+          "lib/net8.0/NATS.Client.Abstractions.dll": {
+            "assemblyVersion": "2.7.3.0",
+            "fileVersion": "2.7.3.0"
+          }
+        }
+      },
+      "NATS.Client.Core/2.7.3": {
+        "dependencies": {
+          "Microsoft.Extensions.Logging.Abstractions": "10.0.7",
+          "Microsoft.Extensions.Primitives": "10.0.7",
+          "NATS.Client.Abstractions": "2.7.3"
+        },
+        "runtime": {
+          "lib/net8.0/NATS.Client.Core.dll": {
+            "assemblyVersion": "2.7.3.0",
+            "fileVersion": "2.7.3.0"
+          }
+        }
+      },
+      "NATS.Client.Hosting/2.7.3": {
+        "dependencies": {
+          "Microsoft.Extensions.Hosting.Abstractions": "8.0.0",
+          "NATS.Client.Core": "2.7.3"
+        },
+        "runtime": {
+          "lib/net8.0/NATS.Client.Hosting.dll": {
+            "assemblyVersion": "2.7.3.0",
+            "fileVersion": "2.7.3.0"
+          }
+        }
+      },
+      "NATS.Client.JetStream/2.7.3": {
+        "dependencies": {
+          "NATS.Client.Core": "2.7.3"
+        },
+        "runtime": {
+          "lib/net8.0/NATS.Client.JetStream.dll": {
+            "assemblyVersion": "2.7.3.0",
+            "fileVersion": "2.7.3.0"
+          }
+        }
+      },
+      "NATS.Client.KeyValueStore/2.7.3": {
+        "dependencies": {
+          "NATS.Client.JetStream": "2.7.3"
+        },
+        "runtime": {
+          "lib/net8.0/NATS.Client.KeyValueStore.dll": {
+            "assemblyVersion": "2.7.3.0",
+            "fileVersion": "2.7.3.0"
+          }
+        }
+      },
+      "NATS.Client.ObjectStore/2.7.3": {
+        "dependencies": {
+          "NATS.Client.JetStream": "2.7.3"
+        },
+        "runtime": {
+          "lib/net8.0/NATS.Client.ObjectStore.dll": {
+            "assemblyVersion": "2.7.3.0",
+            "fileVersion": "2.7.3.0"
+          }
+        }
+      },
+      "NATS.Client.Serializers.Json/2.7.3": {
+        "dependencies": {
+          "NATS.Client.Abstractions": "2.7.3"
+        },
+        "runtime": {
+          "lib/net8.0/NATS.Client.Serializers.Json.dll": {
+            "assemblyVersion": "2.7.3.0",
+            "fileVersion": "2.7.3.0"
+          }
+        }
+      },
+      "NATS.Client.Services/2.7.3": {
+        "dependencies": {
+          "NATS.Client.Core": "2.7.3"
+        },
+        "runtime": {
+          "lib/net8.0/NATS.Client.Services.dll": {
+            "assemblyVersion": "2.7.3.0",
+            "fileVersion": "2.7.3.0"
+          }
+        }
+      },
+      "NATS.Client.Simplified/2.7.3": {
+        "dependencies": {
+          "NATS.Client.Core": "2.7.3",
+          "NATS.Client.Serializers.Json": "2.7.3"
+        },
+        "runtime": {
+          "lib/net8.0/NATS.Client.Simplified.dll": {
+            "assemblyVersion": "2.7.3.0",
+            "fileVersion": "2.7.3.0"
+          }
+        }
+      },
+      "NATS.Net/2.7.3": {
+        "dependencies": {
+          "NATS.Client.Core": "2.7.3",
+          "NATS.Client.Hosting": "2.7.3",
+          "NATS.Client.JetStream": "2.7.3",
+          "NATS.Client.KeyValueStore": "2.7.3",
+          "NATS.Client.ObjectStore": "2.7.3",
+          "NATS.Client.Serializers.Json": "2.7.3",
+          "NATS.Client.Services": "2.7.3",
+          "NATS.Client.Simplified": "2.7.3"
+        },
+        "runtime": {
+          "lib/net8.0/NATS.Net.dll": {
+            "assemblyVersion": "2.7.3.0",
+            "fileVersion": "2.7.3.0"
+          }
+        }
+      },
+      "YamlDotNet/17.1.0": {
+        "runtime": {
+          "lib/net10.0/YamlDotNet.dll": {
+            "assemblyVersion": "17.0.0.0",
+            "fileVersion": "17.1.0.0"
+          }
+        }
+      },
+      "UniversalConnector.Core/1.0.0": {
+        "dependencies": {
+          "Microsoft.Extensions.Logging.Abstractions": "10.0.7",
+          "YamlDotNet": "17.1.0"
+        },
+        "runtime": {
+          "UniversalConnector.Core.dll": {
+            "assemblyVersion": "1.0.0.0",
+            "fileVersion": "1.0.0.0"
+          }
+        }
+      }
+    }
+  },
+  "libraries": {
+    "UniversalConnector.Nats/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "Microsoft.Extensions.Configuration.Abstractions/8.0.0": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-3lE/iLSutpgX1CC0NOW70FJoGARRHbyKmG7dc0klnUZ9Dd9hS6N/POPWhKhMLCEuNN5nXEY5agmlFtH562vqhQ==",
+      "path": "microsoft.extensions.configuration.abstractions/8.0.0",
+      "hashPath": "microsoft.extensions.configuration.abstractions.8.0.0.nupkg.sha512"
+    },
+    "Microsoft.Extensions.DependencyInjection.Abstractions/10.0.7": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-Z6mfFEaFcwCfSboxJwOLfu7/31npCY9q70WUamHW/vRQhDvBKOT4Vf9YkZj5J6hLvJpb0oDEYfHunQZj0xxvKw==",
+      "path": "microsoft.extensions.dependencyinjection.abstractions/10.0.7",
+      "hashPath": "microsoft.extensions.dependencyinjection.abstractions.10.0.7.nupkg.sha512"
+    },
+    "Microsoft.Extensions.Diagnostics.Abstractions/8.0.0": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-JHYCQG7HmugNYUhOl368g+NMxYE/N/AiclCYRNlgCY9eVyiBkOHMwK4x60RYMxv9EL3+rmj1mqHvdCiPpC+D4Q==",
+      "path": "microsoft.extensions.diagnostics.abstractions/8.0.0",
+      "hashPath": "microsoft.extensions.diagnostics.abstractions.8.0.0.nupkg.sha512"
+    },
+    "Microsoft.Extensions.FileProviders.Abstractions/8.0.0": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-ZbaMlhJlpisjuWbvXr4LdAst/1XxH3vZ6A0BsgTphZ2L4PGuxRLz7Jr/S7mkAAnOn78Vu0fKhEgNF5JO3zfjqQ==",
+      "path": "microsoft.extensions.fileproviders.abstractions/8.0.0",
+      "hashPath": "microsoft.extensions.fileproviders.abstractions.8.0.0.nupkg.sha512"
+    },
+    "Microsoft.Extensions.Hosting.Abstractions/8.0.0": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-AG7HWwVRdCHlaA++1oKDxLsXIBxmDpMPb3VoyOoAghEWnkUvEAdYQUwnV4jJbAaa/nMYNiEh5ByoLauZBEiovg==",
+      "path": "microsoft.extensions.hosting.abstractions/8.0.0",
+      "hashPath": "microsoft.extensions.hosting.abstractions.8.0.0.nupkg.sha512"
+    },
+    "Microsoft.Extensions.Logging.Abstractions/10.0.7": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-tIEcQ2gvERrH2KiCjdsVcHGhXt9lIsuDStfOIeZWr7/fP8IXhGiYfx0/80PNI7WPO2IYuFtlZLSlnTS8+/Mchw==",
+      "path": "microsoft.extensions.logging.abstractions/10.0.7",
+      "hashPath": "microsoft.extensions.logging.abstractions.10.0.7.nupkg.sha512"
+    },
+    "Microsoft.Extensions.Options/10.0.7": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-00SHUGTh2jSMvIr6x9Xwd2nE+B5/qFCO/9hDwUDhJsjYRDlADmaBZ7tqehXzBDsfjHSXJzuRHJzPYPPjphBQ7Q==",
+      "path": "microsoft.extensions.options/10.0.7",
+      "hashPath": "microsoft.extensions.options.10.0.7.nupkg.sha512"
+    },
+    "Microsoft.Extensions.Primitives/10.0.7": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-D5M0Jr551iTgwkZMN9rm0pSkgNLj5quUWQUmQPMZh7k/bnvZTnXRGfE2KuvXf1EEjt/ofD9yw9IumpgdP9QCnw==",
+      "path": "microsoft.extensions.primitives/10.0.7",
+      "hashPath": "microsoft.extensions.primitives.10.0.7.nupkg.sha512"
+    },
+    "NATS.Client.Abstractions/2.7.3": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-aaSIUTsCGOWi4McMx8HQlx7+GuL9f0pQI4CDlSl/b7+XOd7O5qUyjnBq8Rek+ejfrbQr3hMqaAn2dm7UyKNvNg==",
+      "path": "nats.client.abstractions/2.7.3",
+      "hashPath": "nats.client.abstractions.2.7.3.nupkg.sha512"
+    },
+    "NATS.Client.Core/2.7.3": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-zPv+h8lnN/DLrqGeIMo0KYfw6FEtO4orEQUJ9NCLk7hPZgNFugXtm+SwWjheUis2m4sf9PsgOP2JS8Ejj1+xzQ==",
+      "path": "nats.client.core/2.7.3",
+      "hashPath": "nats.client.core.2.7.3.nupkg.sha512"
+    },
+    "NATS.Client.Hosting/2.7.3": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-Ojf4JZJ2toSq1mWxRep286aF+xpqJPOXrnuhNO/agEscsNjm0Qmh1UD4l1l9KOZWN5WLiahOomjyRGbUeaNj9g==",
+      "path": "nats.client.hosting/2.7.3",
+      "hashPath": "nats.client.hosting.2.7.3.nupkg.sha512"
+    },
+    "NATS.Client.JetStream/2.7.3": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-BNC+o0aUoJcy2YeEBdTr3RXjO7PCysQiltLQ6P3soZzK/DmjUUFnvTHxoWBlR1L7+nOhxfAZ0Ja/JiyPFMe8yQ==",
+      "path": "nats.client.jetstream/2.7.3",
+      "hashPath": "nats.client.jetstream.2.7.3.nupkg.sha512"
+    },
+    "NATS.Client.KeyValueStore/2.7.3": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-6J87y93b8CeyWfJjXN+sGlMPHOg07XQgj+UWjbkJ598lAVBMSj+BJkvd5ValcEgKThiJDrHLvT5hr0Hjdsfwug==",
+      "path": "nats.client.keyvaluestore/2.7.3",
+      "hashPath": "nats.client.keyvaluestore.2.7.3.nupkg.sha512"
+    },
+    "NATS.Client.ObjectStore/2.7.3": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-2YhKjvqpnmAg+sPPpVkWTQGK94IwuKITeuLgFVD9eARAqXU8dxIbUEcpAbvMYBaHmakDg14n8vqQbMZAp1FjIw==",
+      "path": "nats.client.objectstore/2.7.3",
+      "hashPath": "nats.client.objectstore.2.7.3.nupkg.sha512"
+    },
+    "NATS.Client.Serializers.Json/2.7.3": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-DFVi6cd7O/ZtZj+d4tvC+Jc+uICgqSGhsYgGZstMn1e5P0FoK1v43eLcNNi0NAsaiOfJDFQZqKiDlQ22ZvXgRQ==",
+      "path": "nats.client.serializers.json/2.7.3",
+      "hashPath": "nats.client.serializers.json.2.7.3.nupkg.sha512"
+    },
+    "NATS.Client.Services/2.7.3": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-VzoYQx4LWN3OSnGWEEcdW+ao/0bT/qPD3fWt34m8RJhMIA3CLbXOrAVlTLueUghb6+WwE/8x3IXTCeJx2oHl9w==",
+      "path": "nats.client.services/2.7.3",
+      "hashPath": "nats.client.services.2.7.3.nupkg.sha512"
+    },
+    "NATS.Client.Simplified/2.7.3": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-v4SFCsElJ0WQFTyPCiBK2u9auTN47+0w8WRqZvCVeGH6aatBL63ZEx2CBHnnzKISn6zthhEOqY2LwNOoUd8Vng==",
+      "path": "nats.client.simplified/2.7.3",
+      "hashPath": "nats.client.simplified.2.7.3.nupkg.sha512"
+    },
+    "NATS.Net/2.7.3": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-UtXlpggCWk72t7pZrAMeGSWP7ZyPyEvLfnCMMTwgT/TTUbRYdJPssDbBIQl2qyZy2LiweRhPAiIt1tbsIoS0EQ==",
+      "path": "nats.net/2.7.3",
+      "hashPath": "nats.net.2.7.3.nupkg.sha512"
+    },
+    "YamlDotNet/17.1.0": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-AhsNXgeAs3Ugt653t8LC44xXDuldFfwBpWbWX9pN3e4Yg8U5Bk8jLn8eXtGv5HV2V2nHu7F46fqsPC+tpcTGAA==",
+      "path": "yamldotnet/17.1.0",
+      "hashPath": "yamldotnet.17.1.0.nupkg.sha512"
+    },
+    "UniversalConnector.Core/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    }
+  }
+}

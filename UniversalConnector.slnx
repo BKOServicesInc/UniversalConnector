@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/UniversalConnector.Connectors/UniversalConnector.Connectors.csproj" />
+    <Project Path="src/UniversalConnector.Core/UniversalConnector.Core.csproj" />
+    <Project Path="src/UniversalConnector.Generic/UniversalConnector.Generic.csproj" />
+    <Project Path="src/UniversalConnector.Host/UniversalConnector.Host.csproj" />
+    <Project Path="src/UniversalConnector.Nats/UniversalConnector.Nats.csproj" />
+  </Folder>
+</Solution>

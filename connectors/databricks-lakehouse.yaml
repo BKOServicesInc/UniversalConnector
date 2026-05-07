@@ -1,0 +1,40 @@
+connectorId: databricks-lakehouse
+sourceType: databricks
+description: Lakehouse Delta CDF
+enabled: false
+
+connection:
+  host: "${DATABRICKS_HOST}"
+  httpPath: "${DATABRICKS_HTTP_PATH}"
+  apiToken: "${DATABRICKS_TOKEN}"
+  port: 443
+
+changeDetection:
+  mode: cdc
+  pollIntervalSeconds: 30
+  startingVersion: -1
+
+watch:
+  autoDiscover: false
+  entities:
+    - name: main.sales.transactions
+      primaryKey: [transaction_id]
+    - name: main.inventory.stock_levels
+      primaryKey: [sku_id]
+
+fieldMapping:
+  - source: _commit_version
+    exclude: true
+  - source: _commit_timestamp
+    exclude: true
+  - source: event_time
+    type: timestamp
+
+nats:
+  subjectOverride: lakehouse-changes
+  additionalHeaders:
+    domain: data-platform
+
+resilience:
+  maxConsecutiveFailures: 5
+  retryDelaySeconds: 30

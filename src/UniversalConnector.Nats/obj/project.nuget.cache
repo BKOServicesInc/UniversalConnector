@@ -1,0 +1,28 @@
+{
+  "version": 2,
+  "dgSpecHash": "LmED/sFVCMQ=",
+  "success": true,
+  "projectFilePath": "C:\\Repos\\UniversalConnector\\src\\UniversalConnector.Nats\\UniversalConnector.Nats.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\LuisMartinez\\.nuget\\packages\\microsoft.extensions.configuration.abstractions\\8.0.0\\microsoft.extensions.configuration.abstractions.8.0.0.nupkg.sha512",
+    "C:\\Users\\LuisMartinez\\.nuget\\packages\\microsoft.extensions.dependencyinjection.abstractions\\10.0.7\\microsoft.extensions.dependencyinjection.abstractions.10.0.7.nupkg.sha512",
+    "C:\\Users\\LuisMartinez\\.nuget\\packages\\microsoft.extensions.diagnostics.abstractions\\8.0.0\\microsoft.extensions.diagnostics.abstractions.8.0.0.nupkg.sha512",
+    "C:\\Users\\LuisMartinez\\.nuget\\packages\\microsoft.extensions.fileproviders.abstractions\\8.0.0\\microsoft.extensions.fileproviders.abstractions.8.0.0.nupkg.sha512",
+    "C:\\Users\\LuisMartinez\\.nuget\\packages\\microsoft.extensions.hosting.abstractions\\8.0.0\\microsoft.extensions.hosting.abstractions.8.0.0.nupkg.sha512",
+    "C:\\Users\\LuisMartinez\\.nuget\\packages\\microsoft.extensions.logging.abstractions\\10.0.7\\microsoft.extensions.logging.abstractions.10.0.7.nupkg.sha512",
+    "C:\\Users\\LuisMartinez\\.nuget\\packages\\microsoft.extensions.options\\10.0.7\\microsoft.extensions.options.10.0.7.nupkg.sha512",
+    "C:\\Users\\LuisMartinez\\.nuget\\packages\\microsoft.extensions.primitives\\10.0.7\\microsoft.extensions.primitives.10.0.7.nupkg.sha512",
+    "C:\\Users\\LuisMartinez\\.nuget\\packages\\nats.client.abstractions\\2.7.3\\nats.client.abstractions.2.7.3.nupkg.sha512",
+    "C:\\Users\\LuisMartinez\\.nuget\\packages\\nats.client.core\\2.7.3\\nats.client.core.2.7.3.nupkg.sha512",
+    "C:\\Users\\LuisMartinez\\.nuget\\packages\\nats.client.hosting\\2.7.3\\nats.client.hosting.2.7.3.nupkg.sha512",
+    "C:\\Users\\LuisMartinez\\.nuget\\packages\\nats.client.jetstream\\2.7.3\\nats.client.jetstream.2.7.3.nupkg.sha512",
+    "C:\\Users\\LuisMartinez\\.nuget\\packages\\nats.client.keyvaluestore\\2.7.3\\nats.client.keyvaluestore.2.7.3.nupkg.sha512",
+    "C:\\Users\\LuisMartinez\\.nuget\\packages\\nats.client.objectstore\\2.7.3\\nats.client.objectstore.2.7.3.nupkg.sha512",
+    "C:\\Users\\LuisMartinez\\.nuget\\packages\\nats.client.serializers.json\\2.7.3\\nats.client.serializers.json.2.7.3.nupkg.sha512",
+    "C:\\Users\\LuisMartinez\\.nuget\\packages\\nats.client.services\\2.7.3\\nats.client.services.2.7.3.nupkg.sha512",
+    "C:\\Users\\LuisMartinez\\.nuget\\packages\\nats.client.simplified\\2.7.3\\nats.client.simplified.2.7.3.nupkg.sha512",
+    "C:\\Users\\LuisMartinez\\.nuget\\packages\\nats.net\\2.7.3\\nats.net.2.7.3.nupkg.sha512",
+    "C:\\Users\\LuisMartinez\\.nuget\\packages\\yamldotnet\\17.1.0\\yamldotnet.17.1.0.nupkg.sha512"
+  ],
+  "logs": []
+}

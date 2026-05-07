@@ -1,0 +1,35 @@
+connectorId: mongodb-assets
+sourceType: mongodb
+description: MongoDB assets database via Change Streams CDC
+enabled: false              # set true once the mongo replica set is running
+
+connection:
+  uri: "mongodb://mongo:27017"
+  database: "assetsdb"
+
+changeDetection:
+  mode: polling
+  pollIntervalSeconds: 30
+  watermarkColumn: updatedAt
+  lookbackDuration: PT1H
+
+watch:
+  autoDiscover: false
+  entities:
+    - name: assets
+      primaryKey: [_id]
+    - name: locations
+      primaryKey: [_id]
+
+fieldMapping: []            # _id is automatically carried as a string
+
+nats:
+  subjectOverride: mongodb-changes
+  additionalHeaders:
+    domain: asset-management
+
+resilience:
+  maxConsecutiveFailures: 5
+  retryDelaySeconds: 10
+  backoffMultiplier: 1.5
+  maxRetryDelaySeconds: 120

@@ -1,0 +1,31 @@
+connectorId: seeq-plant
+sourceType: seeq
+description: Seeq process historian signals
+enabled: false
+
+connection:
+  baseUrl: "${SEEQ_BASE_URL}"
+  username: "${SEEQ_USER}"
+  password: "${SEEQ_PASSWORD}"
+
+changeDetection:
+  mode: polling
+  pollIntervalSeconds: 30
+  lookbackDuration: PT30M
+
+watch:
+  autoDiscover: false
+  entities:
+    - name: "${SEEQ_SIGNAL_REACTOR_TEMP}"
+      primaryKey: [signalId]
+    - name: "${SEEQ_SIGNAL_PRESSURE}"
+      primaryKey: [signalId]
+
+nats:
+  subjectOverride: historian-changes
+  additionalHeaders:
+    domain: process-control
+
+resilience:
+  maxConsecutiveFailures: 5
+  retryDelaySeconds: 10
