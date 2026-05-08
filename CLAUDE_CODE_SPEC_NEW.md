@@ -88,20 +88,38 @@ UniversalConnector/
 │
 ├── connectors/                               # YAML descriptor files (one per source)
 │   ├── postgres-orders.yaml
+│   ├── postgres-aveva.yaml                   # NEW — AVEVA Postgres on port 5433 (disabled)
 │   ├── sqlserver-crm.yaml
+│   ├── sqlserver-equipment.yaml
 │   ├── neo4j-graph.yaml
 │   ├── databricks-lakehouse.yaml
-│   ├── mongodb-assets.yaml
+│   ├── mongodb-assets.yaml                   # UPDATED — URI changed to localhost:27017
 │   ├── sharepoint-docs.yaml
 │   ├── sap-s4hana.yaml
 │   ├── seeq-plant.yaml
 │   └── avevapi-historian.yaml
 │
-├── debezium-server/                          # Debezium Server config (planned, not yet built)
-│   └── application.properties
+├── tests/                                    # NEW — unit/integration test project
+│   └── UniversalConnector.Tests/
+│       ├── UniversalConnector.Tests.csproj
+│       ├── Abstractions/
+│       │   └── BaseConnectorTests.cs         # 20 tests
+│       ├── Engine/
+│       │   ├── DescriptorValidatorTests.cs   # 29 tests
+│       │   ├── DescriptorLoaderTests.cs      # 11 tests
+│       │   └── DescriptorStoreTests.cs       # 9 tests
+│       └── Mapping/
+│           └── FieldMapperTests.cs           # 19 tests
+│
+├── docker/                                   # NEW — Docker init scripts
+│   ├── aveva/
+│   │   └── init.sql                          # aveva_db schema + seed data
+│   └── pgadmin/
+│       └── servers.json                      # pgAdmin pre-configured server
 │
 ├── docker-compose.yml                        # PostgreSQL + SQL Server infra
 ├── docker-compose.nats.yml                   # NATS, MongoDB, Neo4j, mongo-express, NUI
+│                                             # UPDATED — added postgres-aveva + pgadmin services
 ├── Dockerfile
 └── _FIRST.md                                 # ← this file
 ```
@@ -563,10 +581,15 @@ services.AddHostedService<ConnectorPipelineService>();
 | `mongo` | `mongo:7` | 27017 | MongoDB (standalone, no replica set) |
 | `mongo-express` | `mongo-express` | 8081 | MongoDB UI → http://localhost:8081 |
 | `neo4j` | `neo4j:5` | 7474, 7687 | Neo4j (auth: `neo4j/YourStrongPassword123!`) |
+| `postgres-aveva` | `postgres:16-alpine` | 5433 | AVEVA Postgres instance — `aveva_db` with assets + locations tables seeded |
+| `pgadmin` | `dpage/pgadmin4:latest` | 5050 | pgAdmin UI → http://localhost:5050 (email: `admin@universalconnector.com` / `admin`) |
 
 > **Known issue (I-9):** MongoDB is started without `--replSet rs0`. Change Streams CDC
 > will fail. Enable polling mode (`mode: polling`) in the MongoDB descriptor, or add a
 > replica set init service if CDC is required.
+
+> **pgAdmin note:** `postgres-aveva` is pre-configured as a server in pgAdmin via
+> `docker/pgadmin/servers.json`. Connect using password `12345`.
 
 ### `docker-compose.yml` — PostgreSQL + SQL Server
 > **Known issue (I-5):** The Postgres service creates user `connector` but the descriptor
@@ -635,9 +658,41 @@ services.AddHostedService<ConnectorPipelineService>();
 
 ---
 
-## 16. Known issues (from audit — not yet fixed)
+## 16. Bug fixes applied
 
-Issues marked Critical were fixed. Remaining:
+### ~~Critical~~ **FIXED — PostgresAdapter multi-connector singleton contamination**
+
+`AdapterRegistry` stores one `IProtocolAdapter` singleton per `sourceType`. `PostgresAdapter`
+previously held instance-level `_dataSource` and `_watermarks` fields which were overwritten
+by whichever postgres connector opened last, causing all connectors to query the same database.
+
+**Root cause:** Instance field `NpgsqlDataSource? _dataSource` overwritten on each `OpenAsync`.
+Watermark key was plain `entityPath`, colliding across connectors tracking the same table name
+in different databases.
+
+**Fix applied (`PostgresAdapter.cs`):**
+```csharp
+// Before (broken)
+private NpgsqlDataSource? _dataSource;
+private readonly Dictionary<string, DateTimeOffset> _watermarks = new();
+
+// After (fixed)
+private readonly Dictionary<string, NpgsqlDataSource> _dataSources = new();   // keyed by connection string
+private readonly Dictionary<string, DateTimeOffset> _watermarks = new();       // keyed by "{connectorId}:{entity}"
+```
+
+New `GetDataSource(ConnectorDescriptor)` helper lazy-creates or retrieves the pooled data source
+for a given connection string. `EnsureReplicationSlotAndPublication` takes `ConnectorDescriptor`
+as its first parameter so CDC operations use the correct connection.
+
+`CloseCoreAsync` is now a no-op — data sources stay alive until `DisposeAsync` iterates
+`_dataSources.Values` and disposes each one.
+
+---
+
+## 17. Known issues (not yet fixed)
+
+Issues marked Critical were fixed (see §16). Remaining:
 
 ### Warnings (should fix before production)
 
@@ -671,11 +726,11 @@ Issues marked Critical were fixed. Remaining:
 
 ---
 
-## 17. Planned / not yet implemented
+## 18. Planned / not yet implemented
 
-- **Debezium integration** — `UniversalConnector.Debezium` project with `DebeziumAdapter`
-  that subscribes to Debezium Server NATS JetStream subjects and maps the `before`/`after`
-  envelope to `RawChangeRecord`. See the Debezium plan in conversation history.
+- **Debezium integration** — implemented as a **separate standalone project** at
+  `C:\Repos\DebeziumConnector`. It is not an adapter inside this project. See
+  `C:\Repos\DebeziumConnector\CLAUDE_CODE_SPEC_NEW.md` (when created) or the session history.
 - **GIN index on `primary_key`** — DDL not yet applied to the running database:
   `CREATE INDEX idx_data_changes_primary_key ON data_changes USING GIN (primary_key);`
 - **Secrets management** — all passwords currently plaintext. Replace with env-var
@@ -683,24 +738,87 @@ Issues marked Critical were fixed. Remaining:
 
 ---
 
-## 18. Testing checklist
+## 19. Unit tests
 
-- [ ] `DescriptorLoader.LoadFromString` correctly propagates `filePath` to failure results
-- [ ] `DescriptorLoader` correctly interpolates `${ENV_VAR}` tokens; fails with filename in error when var missing
-- [ ] `DescriptorLoader` returns `Fail` (with filename) for malformed YAML
-- [ ] `DescriptorValidator` rejects incompatible mode/sourceType combinations
-- [ ] `FieldMapper` correctly excludes, renames, casts, promotes, and injects static fields
+Test project: `tests/UniversalConnector.Tests` — **88 tests, all passing**.
+
+### Stack
+| Package | Version | Purpose |
+|---|---|---|
+| xunit | 2.9.3 | Test framework |
+| FluentAssertions | 6.x | Readable assertions |
+| NSubstitute | 5.x | Mocking (ILogger etc.) |
+
+### Test classes
+
+#### `DescriptorValidatorTests` — 29 tests
+- All 9 known source types pass validation with correct config
+- `connectorId` / `sourceType` empty → error
+- Unknown source type → error
+- Unsupported mode per source type (e.g. `neo4j + cdc`) → error
+- Supported modes per source type (parameterized)
+- Missing connection fields per source type (postgres, neo4j, mongodb, etc.)
+- `connectionString` shortcut bypasses field-level checks
+- FieldMapping: empty `source` → error; `exclude + isKey` → error
+- Warnings: no entities + `autoDiscover: false`, CDC without `replicationSlot`, `retryDelaySeconds < 1`
+
+#### `DescriptorLoaderTests` — 11 tests
+- Valid YAML: top-level fields, `connection`, `watch.entities`, `fieldMapping`
+- Valid JSON format
+- `${ENV_VAR}` interpolation resolves at load time
+- Missing env var → `Fail` result containing variable name
+- Invalid YAML → `Fail` result
+- Descriptor that fails validation → `Fail` result
+- Non-existent directory → empty result list
+- Directory with multiple `.yaml` files → all loaded
+- Mixed valid/invalid files → correct pass/fail counts
+
+#### `DescriptorStoreTests` — 9 tests
+- Register + Get round-trip
+- Get unknown ID → null
+- Case-insensitive lookup
+- Re-registering same ID overwrites previous
+- `GetAll` returns all registered
+- `GetEnabled` filters out `Enabled = false`
+- `Remove` returns true and deletes; unknown ID returns false
+- `Count` reflects live state
+
+#### `FieldMapperTests` — 19 tests
+- No rules: PK columns routed to `PrimaryKey`, rest to `Payload`
+- No rules + no entity config: all fields to `Payload`
+- `exclude: true`: field absent from all output dicts
+- `target` rename: source key replaced in output
+- `isKey: true`: field routed to `PrimaryKey`
+- `staticValue`: injected into `Payload` (or `PrimaryKey` if `isKey`)
+- Type casts: `int`, `long`, `double`, `bool`, `string` (parameterized)
+- `timestamp` → `DateTimeOffset`; `date` → `DateOnly`
+- Cast failure → original value retained
+- `null` value → null after cast
+- Previous fields: same exclusion/rename rules applied; PK columns excluded
+- Empty previous fields → empty `previousPayload`
+
+#### `BaseConnectorTests` — 20 tests
+- Sequence numbers increment from 1 monotonically
+- Clean stream end stops yielding (no hang)
+- Cancellation stops the stream gracefully
+- Transient error: retries and continues; `ConnectCallCount > 1`
+- Exceeds `MaxConsecutiveFailures`: stream stops; `ConnectCallCount >= maxFailures`
+- Health report: `TotalEventsEmitted` matches processed count
+- Health report: `LastError` populated after failure
+- Health report: `Disconnected` state before any connect
+- `ConnectAsync` calls `ConnectCoreAsync` exactly once
+- `DisconnectAsync` calls `DisconnectCoreAsync`
+
+### Still not covered (remaining checklist)
+
 - [ ] `PostgresAdapter` validates `wal_level = logical` before starting CDC
 - [ ] `PostgresAdapter` creates replication slot/publication if not exists
 - [ ] `SqlServerAdapter` enables Change Tracking on first connect when `autoEnableChangeTracking: true`
 - [ ] `GenericConnector` snapshot cache: second poll of same row has non-null `PreviousPayload`
-- [ ] `GenericConnector` snapshot cache: CDC adapter records bypass snapshot (use adapter's PreviousFields)
+- [ ] `GenericConnector` snapshot cache: CDC adapter records bypass snapshot
 - [ ] `GenericConnector` snapshot cache: Delete removes key; subsequent Insert starts fresh
 - [ ] `PostgresDataSink` INSERT is idempotent (duplicate `event_id` → no error)
 - [ ] `PostgresDataSink` sink failure does not throw to caller
-- [ ] `PostgresDataSink` respects CancellationToken via `CommandDefinition`
-- [ ] `AdapterRegistry` logs warning and skips (does not throw) on duplicate `SourceType`
-- [ ] `ConnectorPipelineService` calls `DisconnectAsync(CancellationToken.None)` on shutdown
+- [ ] `AdapterRegistry` logs warning and skips on duplicate `SourceType`
+- [ ] `ConnectorPipelineService` calls `DisconnectAsync` on shutdown
 - [ ] NATS subject format: `universal-connector.{sourceType}.{connectorId}.{changeType}`
-- [ ] Events from all active source types produce valid `DataChangeEvent` JSON
-- [ ] `DescriptorBootstrapService` populates `DescriptorStore` before `ConnectorPipelineService` starts
