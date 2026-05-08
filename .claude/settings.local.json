@@ -8,7 +8,12 @@
       "Bash(dotnet build *)",
       "Bash(Rename-Item \"C:\\\\Repos\\\\UniversalConnector\\\\src\\\\UniversalConnector.Core\\\\Abstractions\\\\IKafkaPublisher.cs\" \"INatsPublisher.cs\")",
       "WebFetch(domain:github.com)",
-      "WebFetch(domain:hub.docker.com)"
+      "WebFetch(domain:hub.docker.com)",
+      "Bash(cd \"C:\\\\Repos\\\\DebeziumConnector\" && dotnet new sln -n DebeziumConnector 2>&1 && dotnet new worker -n DebeziumConnector -o src/DebeziumConnector --framework net10.0 2>&1)",
+      "Bash(rm \"C:\\\\Repos\\\\DebeziumConnector\\\\src\\\\DebeziumConnector.Tests\\\\UnitTest1.cs\")",
+      "Bash(Get-ChildItem -Path \"C:\\\\Repos\\\\UniversalConnector\" -Recurse -Include \"*.cs\", \"*.csproj\", \"*.sln\", \"*.slnx\")",
+      "Bash(Select-Object -Property FullName)",
+      "Bash(Sort-Object FullName)"
     ]
   }
 }

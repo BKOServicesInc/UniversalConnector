@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("UniversalConnector.Generic")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+748460dad3d0fc4affe8bd6f8fc0a504ad855137")]
 [assembly: System.Reflection.AssemblyProductAttribute("UniversalConnector.Generic")]
 [assembly: System.Reflection.AssemblyTitleAttribute("UniversalConnector.Generic")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

@@ -1,0 +1,37 @@
+connectorId: sqlserver-equipment
+sourceType: sqlserver
+description: EQUIPMENT database — SQL Server Change Tracking
+enabled: false
+
+connection:
+  host: "commonmodelsql-dev.database.windows.net"
+  database: "kge-aveva"
+  username: "commonmodelsql-dev"
+  password: "superQ1@!secure"
+
+changeDetection:
+  mode: cdc
+  pollIntervalSeconds: 15
+  autoEnableChangeTracking: true
+
+watch:
+  autoDiscover: false
+  entities:
+    - name: dbo.SQLEquipment
+      primaryKey: [Id]
+
+fieldMapping:
+  - source: SSN
+    exclude: true
+  - source: ModifiedDate
+    type: timestamp
+    target: updatedAt
+
+nats:
+  subjectOverride: crm-changes
+  additionalHeaders:
+    domain: customer-management
+
+resilience:
+  maxConsecutiveFailures: 5
+  retryDelaySeconds: 15

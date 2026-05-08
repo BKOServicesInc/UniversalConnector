@@ -1,10 +1,10 @@
 connectorId: mongodb-assets
 sourceType: mongodb
 description: MongoDB assets database via Change Streams CDC
-enabled: false              # set true once the mongo replica set is running
+enabled: false
 
 connection:
-  uri: "mongodb://mongo:27017"
+  uri: "mongodb://localhost:27017"
   database: "assetsdb"
 
 changeDetection:

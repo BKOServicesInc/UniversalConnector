@@ -10,3 +10,4 @@ C:\Repos\UniversalConnector\src\UniversalConnector.Core\obj\Debug\net10.0\Univer
 C:\Repos\UniversalConnector\src\UniversalConnector.Core\obj\Debug\net10.0\refint\UniversalConnector.Core.dll
 C:\Repos\UniversalConnector\src\UniversalConnector.Core\obj\Debug\net10.0\UniversalConnector.Core.pdb
 C:\Repos\UniversalConnector\src\UniversalConnector.Core\obj\Debug\net10.0\ref\UniversalConnector.Core.dll
+C:\Repos\UniversalConnector\src\UniversalConnector.Core\obj\Debug\net10.0\UniversalConnector.Core.sourcelink.json

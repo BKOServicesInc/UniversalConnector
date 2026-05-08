@@ -14,7 +14,13 @@ namespace UniversalConnector.Generic.Adapters;
 public sealed class PostgresAdapter : BaseProtocolAdapter
 {
     private readonly ILogger<PostgresAdapter> _logger;
-    private NpgsqlDataSource? _dataSource;
+
+    // Keyed by connection string — one data source per unique Postgres endpoint.
+    // Required because the adapter is a singleton shared across all postgres connectors.
+    private readonly Dictionary<string, NpgsqlDataSource> _dataSources = new();
+
+    // Keyed by "{connectorId}:{entityPath}" to prevent watermark collisions
+    // when multiple connectors poll different databases via the same adapter instance.
     private readonly Dictionary<string, DateTimeOffset> _watermarks = new();
 
     public PostgresAdapter(ILogger<PostgresAdapter> logger) => _logger = logger;
@@ -23,17 +29,28 @@ public sealed class PostgresAdapter : BaseProtocolAdapter
 
     protected override Task OpenCoreAsync(ConnectorDescriptor descriptor, CancellationToken ct)
     {
-        _dataSource = NpgsqlDataSource.Create(BuildConnectionString(descriptor));
+        var cs = BuildConnectionString(descriptor);
+        if (!_dataSources.ContainsKey(cs))
+            _dataSources[cs] = NpgsqlDataSource.Create(cs);
         return Task.CompletedTask;
     }
 
     protected override async Task CloseCoreAsync(CancellationToken ct)
     {
-        if (_dataSource is not null)
-        {
-            await _dataSource.DisposeAsync();
-            _dataSource = null;
-        }
+        // Nothing to do here — data sources are disposed in DisposeAsync
+        // to avoid tearing down a shared source that other connectors may still use.
+        await Task.CompletedTask;
+    }
+
+    private NpgsqlDataSource GetDataSource(ConnectorDescriptor descriptor)
+    {
+        var cs = BuildConnectionString(descriptor);
+        if (_dataSources.TryGetValue(cs, out var ds))
+            return ds;
+        // Lazy-create if OpenCoreAsync was skipped (e.g. tests)
+        ds = NpgsqlDataSource.Create(cs);
+        _dataSources[cs] = ds;
+        return ds;
     }
 
     public override async IAsyncEnumerable<RawChangeRecord> StreamRawChangesAsync(
@@ -58,7 +75,7 @@ public sealed class PostgresAdapter : BaseProtocolAdapter
         var publication = descriptor.ChangeDetection.Publication;
         var cs = BuildConnectionString(descriptor);
 
-        await EnsureReplicationSlotAndPublication(slot, publication, ct);
+        await EnsureReplicationSlotAndPublication(descriptor, slot, publication, ct);
 
         // LogicalReplicationConnection takes a plain Npgsql connection string
         await using var conn = new LogicalReplicationConnection(cs);
@@ -145,15 +162,17 @@ public sealed class PostgresAdapter : BaseProtocolAdapter
         var interval = TimeSpan.FromSeconds(descriptor.ChangeDetection.PollIntervalSeconds);
         var watermarkCol = descriptor.ChangeDetection.WatermarkColumn;
         var entities = await ResolveEntities(descriptor, ct);
+        var dataSource = GetDataSource(descriptor);
 
         while (!ct.IsCancellationRequested)
         {
             foreach (var entity in entities)
             {
-                if (!_watermarks.TryGetValue(entity, out var since))
+                var wmKey = $"{descriptor.ConnectorId}:{entity}";
+                if (!_watermarks.TryGetValue(wmKey, out var since))
                     since = DateTimeOffset.UtcNow - ParseDuration(descriptor.ChangeDetection.LookbackDuration);
 
-                await using var conn = await _dataSource!.OpenConnectionAsync(ct);
+                await using var conn = await dataSource.OpenConnectionAsync(ct);
                 var sql = $"SELECT * FROM {entity} WHERE {watermarkCol} > @since ORDER BY {watermarkCol}";
                 await using var cmd = new NpgsqlCommand(sql, conn);
                 cmd.Parameters.AddWithValue("since", since.UtcDateTime);
@@ -181,7 +200,7 @@ public sealed class PostgresAdapter : BaseProtocolAdapter
                     };
                 }
 
-                _watermarks[entity] = maxWatermark;
+                _watermarks[wmKey] = maxWatermark;
             }
 
             await Task.Delay(interval, ct);
@@ -189,9 +208,9 @@ public sealed class PostgresAdapter : BaseProtocolAdapter
     }
 
     private async Task EnsureReplicationSlotAndPublication(
-        string slot, string pub, CancellationToken ct)
+        ConnectorDescriptor descriptor, string slot, string pub, CancellationToken ct)
     {
-        await using var conn = await _dataSource!.OpenConnectionAsync(ct);
+        await using var conn = await GetDataSource(descriptor).OpenConnectionAsync(ct);
 
         // Validate wal_level first — logical replication requires it to be 'logical'.
         // Without this check, StartReplication fails later with a cryptic protocol error.
@@ -234,7 +253,7 @@ public sealed class PostgresAdapter : BaseProtocolAdapter
         if (!d.Watch.AutoDiscover)
             return d.Watch.Entities.Select(e => e.Name).ToList();
 
-        await using var conn = await _dataSource!.OpenConnectionAsync(ct);
+        await using var conn = await GetDataSource(d).OpenConnectionAsync(ct);
         await using var cmd = new NpgsqlCommand(
             "SELECT schemaname || '.' || tablename FROM pg_tables WHERE schemaname NOT IN ('pg_catalog','information_schema')", conn);
         await using var reader = await cmd.ExecuteReaderAsync(ct);
@@ -297,8 +316,9 @@ public sealed class PostgresAdapter : BaseProtocolAdapter
 
     public override async ValueTask DisposeAsync()
     {
-        if (_dataSource is not null)
-            await _dataSource.DisposeAsync();
+        foreach (var ds in _dataSources.Values)
+            await ds.DisposeAsync();
+        _dataSources.Clear();
         await base.DisposeAsync();
     }
 }

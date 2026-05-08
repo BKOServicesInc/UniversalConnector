@@ -84,6 +84,44 @@ services:
       - nats-net
     restart: unless-stopped
 
+  postgres-aveva:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER:     postgres
+      POSTGRES_PASSWORD: "12345"
+      POSTGRES_DB:       postgres        # default db; aveva_db is created by init.sql
+    ports:
+      - "5433:5432"                      # 5433 on host → avoids clash with local Postgres on 5432
+    volumes:
+      - postgres-aveva-data:/var/lib/postgresql/data
+      - ./docker/aveva/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - nats-net
+    restart: unless-stopped
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    environment:
+      PGADMIN_DEFAULT_EMAIL:    admin@universalconnector.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_CONFIG_SERVER_MODE: "False"   # desktop mode — no login prompt
+    ports:
+      - "5050:80"                           # web UI → http://localhost:5050
+    volumes:
+      - pgadmin-data:/var/lib/pgadmin
+      - ./docker/pgadmin/servers.json:/pgadmin4/servers.json:ro
+    depends_on:
+      postgres-aveva:
+        condition: service_healthy
+    networks:
+      - nats-net
+    restart: unless-stopped
+
 networks:
   nats-net:
     driver: bridge
@@ -92,3 +130,5 @@ volumes:
   neo4j-data:
   nui-data:
   mongo-data:
+  postgres-aveva-data:
+  pgadmin-data:

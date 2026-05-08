@@ -1,0 +1,14 @@
+{
+  "Servers": {
+    "1": {
+      "Name": "AVEVA PostgreSQL (Docker)",
+      "Group": "UniversalConnector",
+      "Host": "postgres-aveva",
+      "Port": 5432,
+      "MaintenanceDB": "aveva_db",
+      "Username": "postgres",
+      "SSLMode": "prefer",
+      "PassFile": "/pgpass"
+    }
+  }
+}

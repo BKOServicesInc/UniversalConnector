@@ -13,3 +13,4 @@ C:\Repos\UniversalConnector\src\UniversalConnector.Connectors\obj\Debug\net10.0\
 C:\Repos\UniversalConnector\src\UniversalConnector.Connectors\obj\Debug\net10.0\refint\UniversalConnector.Connectors.dll
 C:\Repos\UniversalConnector\src\UniversalConnector.Connectors\obj\Debug\net10.0\UniversalConnector.Connectors.pdb
 C:\Repos\UniversalConnector\src\UniversalConnector.Connectors\obj\Debug\net10.0\ref\UniversalConnector.Connectors.dll
+C:\Repos\UniversalConnector\src\UniversalConnector.Connectors\obj\Debug\net10.0\UniversalConnector.Connectors.sourcelink.json
