@@ -19,5 +19,6 @@ public class NatsOptions
     public string SubjectPrefix { get; set; } = "cdc";
     public bool UseJetStream { get; set; } = true;
     public string DlqSubjectPrefix { get; set; } = "cdc.dlq";
+    public string CheckpointBucket { get; set; } = "cm-checkpoints";
     public string? CredsFile { get; set; }
 }

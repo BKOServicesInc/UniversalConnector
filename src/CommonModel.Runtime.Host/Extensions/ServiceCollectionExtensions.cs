@@ -15,6 +15,7 @@ public static class ServiceCollectionExtensions
     {
         services.Configure<NatsOptions>(configuration.GetSection("Nats"));
         services.AddSingleton<INatsPublisher, NatsPublisher>();
+        services.AddSingleton<ICheckpointStore, NatsCheckpointStore>();
 
         services.AddGenericConnector();
 

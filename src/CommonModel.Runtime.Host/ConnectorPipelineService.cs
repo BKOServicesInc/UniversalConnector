@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using CommonModel.Runtime.Core.Abstractions;
+using CommonModel.Runtime.Core.Models;
 
 namespace CommonModel.Runtime.Host;
 
@@ -8,15 +9,18 @@ public sealed class ConnectorPipelineService : BackgroundService
 {
     private readonly IConnectorRegistry _registry;
     private readonly INatsPublisher _publisher;
+    private readonly ICheckpointStore _checkpoints;
     private readonly ILogger<ConnectorPipelineService> _logger;
 
     public ConnectorPipelineService(
         IConnectorRegistry registry,
         INatsPublisher publisher,
+        ICheckpointStore checkpoints,
         ILogger<ConnectorPipelineService> logger)
     {
         _registry = registry;
         _publisher = publisher;
+        _checkpoints = checkpoints;
         _logger = logger;
     }
 
@@ -52,6 +56,15 @@ public sealed class ConnectorPipelineService : BackgroundService
                 try
                 {
                     await _publisher.PublishAsync(evt, ct: ct);
+
+                    var position = evt.SourceTimestamp?.ToString("O") ?? evt.EventId;
+                    await _checkpoints.SaveAsync(new Checkpoint
+                    {
+                        DriverId   = evt.DriverId,
+                        EntityPath = evt.EntityPath,
+                        Position   = position
+                    }, ct);
+
                     _logger.LogDebug("Published {ChangeType} event for {DriverId}/{EntityPath}",
                         evt.ChangeType, evt.DriverId, evt.EntityPath);
                 }

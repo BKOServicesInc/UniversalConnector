@@ -21,6 +21,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\CommonModel.Runtime.Core\CommonModel.Runtime.Core.csproj" />
     <ProjectReference Include="..\..\src\CommonModel.Runtime.Drivers.Generic\CommonModel.Runtime.Drivers.Generic.csproj" />
+    <ProjectReference Include="..\..\src\CommonModel.Runtime.Infrastructure\CommonModel.Runtime.Infrastructure.csproj" />
   </ItemGroup>
 
   <ItemGroup>
