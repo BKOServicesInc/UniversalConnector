@@ -13,7 +13,10 @@
       "Bash(rm \"C:\\\\Repos\\\\DebeziumConnector\\\\src\\\\DebeziumConnector.Tests\\\\UnitTest1.cs\")",
       "Bash(Get-ChildItem -Path \"C:\\\\Repos\\\\UniversalConnector\" -Recurse -Include \"*.cs\", \"*.csproj\", \"*.sln\", \"*.slnx\")",
       "Bash(Select-Object -Property FullName)",
-      "Bash(Sort-Object FullName)"
+      "Bash(Sort-Object FullName)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Repos\\\\DebeziumConnector\" -Recurse -File)",
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "Bash(Sort-Object)"
     ]
   }
 }
