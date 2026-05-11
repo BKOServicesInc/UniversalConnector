@@ -1,10 +1,10 @@
-﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging;
 using CommonModel.Runtime.Core.Abstractions;
 using CommonModel.Runtime.Drivers.Generic.Mapping;
 
 namespace CommonModel.Runtime.Drivers.Generic.Engine;
 
-public sealed class MultiSourceGenericFactory : IConnectorFactory
+public sealed class MultiSourceGenericFactory : IDriverFactory
 {
     private readonly AdapterRegistry _adapterRegistry;
     private readonly DescriptorStore _descriptorStore;
@@ -25,10 +25,10 @@ public sealed class MultiSourceGenericFactory : IConnectorFactory
         _loggerFactory = loggerFactory;
     }
 
-    public IDataSourceConnector Create(string connectorId)
+    public ISourceDriver Create(string driverId)
     {
-        var descriptor = _descriptorStore.Get(connectorId)
-            ?? throw new InvalidOperationException($"No descriptor found for connectorId '{connectorId}'");
+        var descriptor = _descriptorStore.Get(driverId)
+            ?? throw new InvalidOperationException($"No descriptor found for driverId '{driverId}'");
 
         var adapter = _adapterRegistry.Resolve(descriptor.SourceType);
         var logger = _loggerFactory.CreateLogger<GenericConnector>();

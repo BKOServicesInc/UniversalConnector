@@ -1,5 +1,6 @@
-﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using System.Composition;
 using System.Data.Odbc;
 using System.Runtime.CompilerServices;
 using CommonModel.Runtime.Core.Abstractions;
@@ -18,6 +19,7 @@ public sealed class DatabricksConnectorOptions : Core.Configuration.ConnectorOpt
     public List<string> Tables { get; set; } = new();
 }
 
+[Export(typeof(ISourceDriver))]
 public sealed class DatabricksConnector : BaseConnector
 {
     private readonly DatabricksConnectorOptions _options;
@@ -26,7 +28,7 @@ public sealed class DatabricksConnector : BaseConnector
     public DatabricksConnector(IOptions<DatabricksConnectorOptions> options, ILogger<DatabricksConnector> logger)
         : base(logger) => _options = options.Value;
 
-    public override string ConnectorId => _options.ConnectorId;
+    public override string DriverId => _options.DriverId;
     public override string SourceType => "databricks";
 
     protected override Task ConnectCoreAsync(CancellationToken ct)
@@ -39,7 +41,7 @@ public sealed class DatabricksConnector : BaseConnector
 
     protected override Task DisconnectCoreAsync(CancellationToken ct) => Task.CompletedTask;
 
-    protected override async IAsyncEnumerable<DataChangeEvent> PollOrStreamAsync(
+    protected override async IAsyncEnumerable<RawChangeEvent> PollOrStreamAsync(
         [EnumeratorCancellation] CancellationToken ct)
     {
         var interval = TimeSpan.FromSeconds(_options.PollIntervalSeconds);
@@ -71,15 +73,15 @@ public sealed class DatabricksConnector : BaseConnector
                         if (wmOffset > maxWm) maxWm = wmOffset;
                     }
 
-                    yield return new DataChangeEvent
+                    yield return new RawChangeEvent
                     {
                         SourceType = SourceType,
-                        ConnectorId = ConnectorId,
+                        DriverId = DriverId,
                         EntityPath = table,
                         ChangeType = ChangeType.Snapshot,
                         SourceTimestamp = maxWm,
                         PrimaryKey = new Dictionary<string, object?>(),
-                        Payload = fields
+                        Fields = fields
                     };
                 }
 

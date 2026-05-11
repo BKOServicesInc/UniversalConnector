@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using CommonModel.Runtime.Core.Abstractions;
 
@@ -22,38 +22,38 @@ public sealed class ConnectorPipelineService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var connectors = _registry.ResolveAll();
+        var drivers = _registry.ResolveAll();
 
-        if (connectors.Count == 0)
+        if (drivers.Count == 0)
         {
-            _logger.LogWarning("No connectors resolved. Check descriptor files or connector configuration.");
+            _logger.LogWarning("No drivers resolved. Check descriptor files or driver configuration.");
             return;
         }
 
-        _logger.LogInformation("Starting {Count} connector(s)", connectors.Count);
+        _logger.LogInformation("Starting {Count} driver(s)", drivers.Count);
 
-        var tasks = connectors.Select(c => RunConnectorAsync(c, stoppingToken)).ToArray();
+        var tasks = drivers.Select(d => RunDriverAsync(d, stoppingToken)).ToArray();
         await Task.WhenAll(tasks);
 
-        _logger.LogInformation("All connector tasks completed");
+        _logger.LogInformation("All driver tasks completed");
     }
 
-    private async Task RunConnectorAsync(IDataSourceConnector connector, CancellationToken ct)
+    private async Task RunDriverAsync(ISourceDriver driver, CancellationToken ct)
     {
-        _logger.LogInformation("Starting connector '{ConnectorId}' ({SourceType})",
-            connector.ConnectorId, connector.SourceType);
+        _logger.LogInformation("Starting driver '{DriverId}' ({SourceType})",
+            driver.DriverId, driver.SourceType);
 
         try
         {
-            await connector.ConnectAsync(ct);
+            await driver.ConnectAsync(ct);
 
-            await foreach (var evt in connector.StreamChangesAsync(ct))
+            await foreach (var evt in driver.StreamChangesAsync(ct))
             {
                 try
                 {
                     await _publisher.PublishAsync(evt, ct: ct);
-                    _logger.LogDebug("Published {ChangeType} event for {ConnectorId}/{EntityPath}",
-                        evt.ChangeType, evt.ConnectorId, evt.EntityPath);
+                    _logger.LogDebug("Published {ChangeType} event for {DriverId}/{EntityPath}",
+                        evt.ChangeType, evt.DriverId, evt.EntityPath);
                 }
                 catch (Exception ex) when (!ct.IsCancellationRequested)
                 {
@@ -63,25 +63,24 @@ public sealed class ConnectorPipelineService : BackgroundService
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
-            _logger.LogInformation("Connector '{ConnectorId}' stopped gracefully", connector.ConnectorId);
+            _logger.LogInformation("Driver '{DriverId}' stopped gracefully", driver.DriverId);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Connector '{ConnectorId}' terminated with error", connector.ConnectorId);
+            _logger.LogError(ex, "Driver '{DriverId}' terminated with error", driver.DriverId);
         }
         finally
         {
             try
             {
-                // Use CancellationToken.None — stoppingToken is already cancelled at this point
-                await connector.DisconnectAsync(CancellationToken.None);
+                await driver.DisconnectAsync(CancellationToken.None);
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Error during disconnect for '{ConnectorId}'", connector.ConnectorId);
+                _logger.LogWarning(ex, "Error during disconnect for '{DriverId}'", driver.DriverId);
             }
 
-            await connector.DisposeAsync();
+            await driver.DisposeAsync();
         }
     }
 }

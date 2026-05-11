@@ -1,5 +1,6 @@
-﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using System.Composition;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Runtime.CompilerServices;
@@ -19,6 +20,7 @@ public sealed class SharePointConnectorOptions : Core.Configuration.ConnectorOpt
     public List<string> ListNames { get; set; } = new();
 }
 
+[Export(typeof(ISourceDriver))]
 public sealed class SharePointConnector : BaseConnector
 {
     private readonly SharePointConnectorOptions _options;
@@ -28,7 +30,7 @@ public sealed class SharePointConnector : BaseConnector
     public SharePointConnector(IOptions<SharePointConnectorOptions> options, ILogger<SharePointConnector> logger)
         : base(logger) => _options = options.Value;
 
-    public override string ConnectorId => _options.ConnectorId;
+    public override string DriverId => _options.DriverId;
     public override string SourceType => "sharepoint";
 
     protected override async Task ConnectCoreAsync(CancellationToken ct)
@@ -50,7 +52,7 @@ public sealed class SharePointConnector : BaseConnector
 
     protected override Task DisconnectCoreAsync(CancellationToken ct) => Task.CompletedTask;
 
-    protected override async IAsyncEnumerable<DataChangeEvent> PollOrStreamAsync(
+    protected override async IAsyncEnumerable<RawChangeEvent> PollOrStreamAsync(
         [EnumeratorCancellation] CancellationToken ct)
     {
         var interval = TimeSpan.FromSeconds(_options.PollIntervalSeconds);
@@ -73,21 +75,20 @@ public sealed class SharePointConnector : BaseConnector
                         foreach (var prop in item.EnumerateObject())
                             fields[prop.Name] = prop.Value.GetRawText();
 
-                        yield return new DataChangeEvent
+                        yield return new RawChangeEvent
                         {
                             SourceType = SourceType,
-                            ConnectorId = ConnectorId,
+                            DriverId = DriverId,
                             EntityPath = listName,
                             ChangeType = deleted ? ChangeType.Delete : ChangeType.Update,
                             PrimaryKey = new Dictionary<string, object?> { ["id"] = fields.GetValueOrDefault("id") },
-                            Payload = fields
+                            Fields = fields
                         };
                     }
                 }
 
                 if (response.TryGetProperty("@odata.deltaLink", out var link))
                     _deltaLinks[listName] = link.GetString()!;
-
             }
 
             await Task.Delay(interval, ct);

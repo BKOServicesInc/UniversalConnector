@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using CommonModel.Runtime.Core.Descriptors;
 
 namespace CommonModel.Runtime.Drivers.Generic.Mapping;
@@ -7,8 +7,8 @@ public sealed class FieldMapper
 {
     public (
         IReadOnlyDictionary<string, object?> PrimaryKey,
-        IReadOnlyDictionary<string, object?> Payload,
-        IReadOnlyDictionary<string, object?> PreviousPayload
+        IReadOnlyDictionary<string, object?> Fields,
+        IReadOnlyDictionary<string, object?> PreviousFields
     ) Apply(
         IReadOnlyDictionary<string, object?> fields,
         IReadOnlyDictionary<string, object?> previousFields,

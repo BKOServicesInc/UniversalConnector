@@ -1,4 +1,4 @@
-﻿using System.Runtime.CompilerServices;
+using System.Runtime.CompilerServices;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
 using CommonModel.Runtime.Core.Abstractions;
@@ -43,7 +43,7 @@ public class BaseConnectorTests
         using var cts = new CancellationTokenSource();
         var connector = new StubConnector(InfiniteEvents());
 
-        var results = new List<DataChangeEvent>();
+        var results = new List<RawChangeEvent>();
         await foreach (var evt in connector.StreamChangesAsync(cts.Token))
         {
             results.Add(evt);
@@ -87,37 +87,37 @@ public class BaseConnectorTests
     // ── Health report ─────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task GetHealthReport_AfterEvents_ReflectsCorrectCount()
+    public async Task GetHealth_AfterEvents_ReflectsCorrectCount()
     {
         var connector = new StubConnector(Events(3));
         await CollectAsync(connector, maxItems: 3);
 
-        var report = connector.GetHealthReport();
+        var report = connector.GetHealth();
 
         report.TotalEventsEmitted.Should().Be(3);
-        report.ConnectorId.Should().Be("stub");
+        report.DriverId.Should().Be("stub");
         report.SourceType.Should().Be("test");
     }
 
     [Fact]
-    public async Task GetHealthReport_AfterFailure_RecordsError()
+    public async Task GetHealth_AfterFailure_RecordsError()
     {
         var connector = new StubConnector(alwaysFail: true, maxFailures: 1, retryDelaySeconds: 0);
         await CollectAsync(connector, maxItems: 5, timeoutMs: 2000);
 
-        var report = connector.GetHealthReport();
+        var report = connector.GetHealth();
 
         report.LastError.Should().NotBeNullOrEmpty();
         report.ConsecutiveFailures.Should().BeGreaterThan(0);
     }
 
     [Fact]
-    public void GetHealthReport_BeforeConnect_ShowsDisconnectedState()
+    public void GetHealth_BeforeConnect_ShowsDisconnectedState()
     {
         var connector = new StubConnector(Events(0));
-        var report    = connector.GetHealthReport();
+        var report    = connector.GetHealth();
 
-        report.State.Should().Be(ConnectorState.Disconnected);
+        report.State.Should().Be(DriverState.Disconnected);
         report.TotalEventsEmitted.Should().Be(0);
     }
 
@@ -143,13 +143,13 @@ public class BaseConnectorTests
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    private static async Task<List<DataChangeEvent>> CollectAsync(
+    private static async Task<List<RawChangeEvent>> CollectAsync(
         StubConnector connector,
         int maxItems,
         int timeoutMs = 2000)
     {
         using var cts = new CancellationTokenSource(timeoutMs);
-        var results   = new List<DataChangeEvent>();
+        var results   = new List<RawChangeEvent>();
 
         try
         {
@@ -166,28 +166,28 @@ public class BaseConnectorTests
         return results;
     }
 
-    private static IEnumerable<DataChangeEvent> Events(int count) =>
-        Enumerable.Range(1, count).Select(i => new DataChangeEvent
+    private static IEnumerable<RawChangeEvent> Events(int count) =>
+        Enumerable.Range(1, count).Select(i => new RawChangeEvent
         {
             SourceType = "test",
-            ConnectorId = "stub",
+            DriverId   = "stub",
             EntityPath = "public.items",
             ChangeType = ChangeType.Insert,
             PrimaryKey = new Dictionary<string, object?> { ["id"] = i },
-            Payload    = new Dictionary<string, object?> { ["value"] = i }
+            Fields     = new Dictionary<string, object?> { ["value"] = i }
         });
 
-    private static IEnumerable<DataChangeEvent> InfiniteEvents()
+    private static IEnumerable<RawChangeEvent> InfiniteEvents()
     {
         var i = 0;
-        while (true) yield return new DataChangeEvent
+        while (true) yield return new RawChangeEvent
         {
             SourceType  = "test",
-            ConnectorId = "stub",
+            DriverId    = "stub",
             EntityPath  = "public.items",
             ChangeType  = ChangeType.Insert,
             PrimaryKey  = new Dictionary<string, object?> { ["id"] = ++i },
-            Payload     = new Dictionary<string, object?> { ["value"] = i }
+            Fields      = new Dictionary<string, object?> { ["value"] = i }
         };
     }
 
@@ -195,7 +195,7 @@ public class BaseConnectorTests
 
     private sealed class StubConnector : BaseConnector
     {
-        private readonly IEnumerable<DataChangeEvent> _events;
+        private readonly IEnumerable<RawChangeEvent> _events;
         private readonly bool _alwaysFail;
         private int _failFirstN;
         private int _failCount;
@@ -207,22 +207,22 @@ public class BaseConnectorTests
         protected override int RetryDelaySeconds      { get; }
 
         public StubConnector(
-            IEnumerable<DataChangeEvent>? events = null,
+            IEnumerable<RawChangeEvent>? events = null,
             bool alwaysFail = false,
             int failFirstN = 0,
             int maxFailures = 5,
             int retryDelaySeconds = 0)
             : base(Substitute.For<ILogger>())
         {
-            _events       = events ?? Enumerable.Empty<DataChangeEvent>();
+            _events       = events ?? Enumerable.Empty<RawChangeEvent>();
             _alwaysFail   = alwaysFail;
             _failFirstN   = failFirstN;
             MaxConsecutiveFailures = maxFailures;
             RetryDelaySeconds      = retryDelaySeconds;
         }
 
-        public override string ConnectorId => "stub";
-        public override string SourceType  => "test";
+        public override string DriverId   => "stub";
+        public override string SourceType => "test";
 
         protected override Task ConnectCoreAsync(CancellationToken ct)
         {
@@ -236,7 +236,7 @@ public class BaseConnectorTests
             return Task.CompletedTask;
         }
 
-        protected override async IAsyncEnumerable<DataChangeEvent> PollOrStreamAsync(
+        protected override async IAsyncEnumerable<RawChangeEvent> PollOrStreamAsync(
             [EnumeratorCancellation] CancellationToken ct)
         {
             if (_alwaysFail)

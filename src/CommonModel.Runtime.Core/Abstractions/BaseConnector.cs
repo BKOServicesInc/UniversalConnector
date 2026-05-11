@@ -1,22 +1,22 @@
-﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging;
 using System.Runtime.CompilerServices;
 using CommonModel.Runtime.Core.Models;
 
 namespace CommonModel.Runtime.Core.Abstractions;
 
-public abstract class BaseConnector : IDataSourceConnector
+public abstract class BaseConnector : ISourceDriver
 {
     protected readonly ILogger Logger;
     private long _sequenceNumber;
     private int _consecutiveFailures;
-    private ConnectorState _state = ConnectorState.Disconnected;
+    private DriverState _state = DriverState.Disconnected;
     private DateTimeOffset? _lastEventAt;
     private long _totalEvents;
     private string? _lastError;
 
     protected BaseConnector(ILogger logger) => Logger = logger;
 
-    public abstract string ConnectorId { get; }
+    public abstract string DriverId { get; }
     public abstract string SourceType { get; }
 
     protected virtual int MaxConsecutiveFailures => 5;
@@ -26,30 +26,30 @@ public abstract class BaseConnector : IDataSourceConnector
 
     protected abstract Task ConnectCoreAsync(CancellationToken ct);
     protected abstract Task DisconnectCoreAsync(CancellationToken ct);
-    protected abstract IAsyncEnumerable<DataChangeEvent> PollOrStreamAsync(CancellationToken ct);
+    protected abstract IAsyncEnumerable<RawChangeEvent> PollOrStreamAsync(CancellationToken ct);
 
     public async Task ConnectAsync(CancellationToken ct)
     {
-        _state = ConnectorState.Connecting;
+        _state = DriverState.Connecting;
         try
         {
             await ConnectCoreAsync(ct);
-            _state = ConnectorState.Connected;
-            Logger.LogInformation("Connector {Id} connected", ConnectorId);
+            _state = DriverState.Connected;
+            Logger.LogInformation("Driver {Id} connected", DriverId);
         }
         catch (Exception ex)
         {
-            _state = ConnectorState.Failed;
+            _state = DriverState.Failed;
             _lastError = ex.Message;
-            Logger.LogError(ex, "Connector {Id} failed to connect", ConnectorId);
+            Logger.LogError(ex, "Driver {Id} failed to connect", DriverId);
             throw;
         }
     }
 
-    public async IAsyncEnumerable<DataChangeEvent> StreamChangesAsync(
+    public async IAsyncEnumerable<RawChangeEvent> StreamChangesAsync(
         [EnumeratorCancellation] CancellationToken ct)
     {
-        _state = ConnectorState.Streaming;
+        _state = DriverState.Streaming;
         var retryDelay = TimeSpan.FromSeconds(Math.Max(RetryDelaySeconds, 1));
 
         while (!ct.IsCancellationRequested)
@@ -59,12 +59,12 @@ public abstract class BaseConnector : IDataSourceConnector
             var enumerator = PollOrStreamAsync(ct).GetAsyncEnumerator(ct);
             await using var _ = enumerator;
 
-            DataChangeEvent? ready = null;
+            RawChangeEvent? ready = null;
             Exception? failure = null;
             bool more = true;
 
             while (more && !ct.IsCancellationRequested)
-        {
+            {
                 ready = null;
                 failure = null;
 
@@ -98,17 +98,17 @@ public abstract class BaseConnector : IDataSourceConnector
                 {
                     _consecutiveFailures++;
                     _lastError = failure.Message;
-                    Logger.LogError(failure, "Connector {Id} stream error (failure {N}/{Max})",
-                        ConnectorId, _consecutiveFailures, MaxConsecutiveFailures);
+                    Logger.LogError(failure, "Driver {Id} stream error (failure {N}/{Max})",
+                        DriverId, _consecutiveFailures, MaxConsecutiveFailures);
 
                     if (_consecutiveFailures >= MaxConsecutiveFailures)
                     {
-                        _state = ConnectorState.Failed;
-                        Logger.LogCritical("Connector {Id} exceeded max consecutive failures, stopping", ConnectorId);
+                        _state = DriverState.Failed;
+                        Logger.LogCritical("Driver {Id} exceeded max consecutive failures, stopping", DriverId);
                         yield break;
                     }
 
-                    _state = ConnectorState.Reconnecting;
+                    _state = DriverState.Reconnecting;
                     try
                     {
                         await Task.Delay(retryDelay, ct);
@@ -116,7 +116,7 @@ public abstract class BaseConnector : IDataSourceConnector
                             Math.Min(retryDelay.TotalMilliseconds * BackoffMultiplier,
                                      MaxRetryDelaySeconds * 1000.0));
                         await ConnectCoreAsync(ct);
-                        _state = ConnectorState.Streaming;
+                        _state = DriverState.Streaming;
                     }
                     catch (OperationCanceledException) when (ct.IsCancellationRequested)
                     {
@@ -124,7 +124,7 @@ public abstract class BaseConnector : IDataSourceConnector
                     }
                     catch (Exception reconnectEx)
                     {
-                        Logger.LogError(reconnectEx, "Connector {Id} reconnect failed", ConnectorId);
+                        Logger.LogError(reconnectEx, "Driver {Id} reconnect failed", DriverId);
                     }
                 }
             }
@@ -143,14 +143,14 @@ public abstract class BaseConnector : IDataSourceConnector
         }
         finally
         {
-            _state = ConnectorState.Disconnected;
-            Logger.LogInformation("Connector {Id} disconnected", ConnectorId);
+            _state = DriverState.Disconnected;
+            Logger.LogInformation("Driver {Id} disconnected", DriverId);
         }
     }
 
-    public ConnectorHealthReport GetHealthReport() => new()
+    public HealthStatus GetHealth() => new()
     {
-        ConnectorId = ConnectorId,
+        DriverId = DriverId,
         SourceType = SourceType,
         State = _state,
         LastChecked = DateTimeOffset.UtcNow,

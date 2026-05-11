@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using NATS.Client.Core;
 using System.Text.Json;
@@ -22,7 +22,7 @@ public sealed class NatsPublisher : INatsPublisher
     }
 
     public async Task PublishAsync(
-        DataChangeEvent evt,
+        RawChangeEvent evt,
         string? subjectOverride = null,
         IReadOnlyDictionary<string, string>? additionalHeaders = null,
         CancellationToken ct = default)
@@ -30,7 +30,7 @@ public sealed class NatsPublisher : INatsPublisher
         var connection = await GetOrCreateConnectionAsync(ct);
 
         var subject = subjectOverride
-            ?? $"{_options.SubjectPrefix}.{evt.SourceType}.{evt.ConnectorId}.{evt.ChangeType}"
+            ?? $"{_options.SubjectPrefix}.{evt.SourceType}.{evt.DriverId}.{evt.ChangeType}"
                 .ToLowerInvariant();
 
         var json = JsonSerializer.Serialize(evt, JsonOptions.Default);
@@ -40,8 +40,8 @@ public sealed class NatsPublisher : INatsPublisher
         {
             await connection.PublishAsync(subject, json, headers: headers, cancellationToken: ct);
 
-            _logger.LogDebug("Published {ChangeType} event for {ConnectorId}/{EntityPath} to {Subject}",
-                evt.ChangeType, evt.ConnectorId, evt.EntityPath, subject);
+            _logger.LogDebug("Published {ChangeType} event for {DriverId}/{EntityPath} to {Subject}",
+                evt.ChangeType, evt.DriverId, evt.EntityPath, subject);
         }
         catch (Exception ex)
         {
@@ -81,15 +81,14 @@ public sealed class NatsPublisher : INatsPublisher
     }
 
     private static NatsHeaders BuildHeaders(
-        DataChangeEvent evt,
+        RawChangeEvent evt,
         IReadOnlyDictionary<string, string>? extra)
     {
         var headers = new NatsHeaders
         {
-            ["connectorId"]   = evt.ConnectorId,
-            ["sourceType"]    = evt.SourceType,
-            ["changeType"]    = evt.ChangeType.ToString(),
-            ["schemaVersion"] = evt.SchemaVersion
+            ["driverId"]    = evt.DriverId,
+            ["sourceType"]  = evt.SourceType,
+            ["changeType"]  = evt.ChangeType.ToString()
         };
 
         if (extra is not null)

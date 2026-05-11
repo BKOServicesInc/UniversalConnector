@@ -1,6 +1,7 @@
-﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Npgsql;
+using System.Composition;
 using System.Runtime.CompilerServices;
 using CommonModel.Runtime.Core.Abstractions;
 using CommonModel.Runtime.Core.Models;
@@ -15,6 +16,7 @@ public sealed class PostgresConnectorOptions : Core.Configuration.ConnectorOptio
     public List<string> Tables { get; set; } = new();
 }
 
+[Export(typeof(ISourceDriver))]
 public sealed class PostgresConnector : BaseConnector
 {
     private readonly PostgresConnectorOptions _options;
@@ -24,7 +26,7 @@ public sealed class PostgresConnector : BaseConnector
     public PostgresConnector(IOptions<PostgresConnectorOptions> options, ILogger<PostgresConnector> logger)
         : base(logger) => _options = options.Value;
 
-    public override string ConnectorId => _options.ConnectorId;
+    public override string DriverId => _options.DriverId;
     public override string SourceType => "postgres";
 
     protected override int MaxConsecutiveFailures => _options.MaxConsecutiveFailures;
@@ -45,7 +47,7 @@ public sealed class PostgresConnector : BaseConnector
         }
     }
 
-    protected override async IAsyncEnumerable<DataChangeEvent> PollOrStreamAsync(
+    protected override async IAsyncEnumerable<RawChangeEvent> PollOrStreamAsync(
         [EnumeratorCancellation] CancellationToken ct)
     {
         var interval = TimeSpan.FromSeconds(_options.PollIntervalSeconds);
@@ -76,15 +78,14 @@ public sealed class PostgresConnector : BaseConnector
                         if (wmOffset > maxWm) maxWm = wmOffset;
                     }
 
-                    var pk = new Dictionary<string, object?>();
-                    yield return new DataChangeEvent
+                    yield return new RawChangeEvent
                     {
                         SourceType = SourceType,
-                        ConnectorId = ConnectorId,
+                        DriverId = DriverId,
                         EntityPath = table,
                         ChangeType = ChangeType.Snapshot,
-                        PrimaryKey = pk,
-                        Payload = fields
+                        PrimaryKey = new Dictionary<string, object?>(),
+                        Fields = fields
                     };
                 }
 

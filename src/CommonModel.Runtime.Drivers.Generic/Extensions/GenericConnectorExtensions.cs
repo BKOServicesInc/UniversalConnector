@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection;
 using CommonModel.Runtime.Core.Abstractions;
 using CommonModel.Runtime.Core.Descriptors;
 using CommonModel.Runtime.Drivers.Generic.Adapters;
@@ -46,7 +46,7 @@ public static class GenericConnectorExtensions
         services.AddHostedService<DescriptorBootstrapService>();
 
         // Generic factory fallback (sourceType = "*")
-        services.AddSingleton<IConnectorFactory, MultiSourceGenericFactory>();
+        services.AddSingleton<IDriverFactory, MultiSourceGenericFactory>();
 
         return services;
     }

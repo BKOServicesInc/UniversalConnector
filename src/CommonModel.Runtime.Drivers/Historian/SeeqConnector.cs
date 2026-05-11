@@ -1,5 +1,6 @@
-﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using System.Composition;
 using System.Net.Http.Json;
 using System.Runtime.CompilerServices;
 using System.Text;
@@ -18,6 +19,7 @@ public sealed class SeeqConnectorOptions : Core.Configuration.ConnectorOptions
     public List<string> SignalIds { get; set; } = new();
 }
 
+[Export(typeof(ISourceDriver))]
 public sealed class SeeqConnector : BaseConnector
 {
     private readonly SeeqConnectorOptions _options;
@@ -27,7 +29,7 @@ public sealed class SeeqConnector : BaseConnector
     public SeeqConnector(IOptions<SeeqConnectorOptions> options, ILogger<SeeqConnector> logger)
         : base(logger) => _options = options.Value;
 
-    public override string ConnectorId => _options.ConnectorId;
+    public override string DriverId => _options.DriverId;
     public override string SourceType => "seeq";
 
     protected override async Task ConnectCoreAsync(CancellationToken ct)
@@ -50,7 +52,7 @@ public sealed class SeeqConnector : BaseConnector
         return Task.CompletedTask;
     }
 
-    protected override async IAsyncEnumerable<DataChangeEvent> PollOrStreamAsync(
+    protected override async IAsyncEnumerable<RawChangeEvent> PollOrStreamAsync(
         [EnumeratorCancellation] CancellationToken ct)
     {
         var interval = TimeSpan.FromSeconds(_options.PollIntervalSeconds);
@@ -75,15 +77,15 @@ public sealed class SeeqConnector : BaseConnector
                             ? DateTimeOffset.Parse(key.GetString()!)
                             : since;
 
-                        yield return new DataChangeEvent
+                        yield return new RawChangeEvent
                         {
                             SourceType = SourceType,
-                            ConnectorId = ConnectorId,
+                            DriverId = DriverId,
                             EntityPath = signalId,
                             ChangeType = ChangeType.Snapshot,
                             SourceTimestamp = timestamp,
                             PrimaryKey = new Dictionary<string, object?> { ["signalId"] = signalId },
-                            Payload = new Dictionary<string, object?>
+                            Fields = new Dictionary<string, object?>
                             {
                                 ["value"] = sample.TryGetProperty("value", out var v) ? v.GetRawText() : null,
                                 ["timestamp"] = timestamp

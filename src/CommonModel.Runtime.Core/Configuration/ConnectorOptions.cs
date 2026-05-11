@@ -1,8 +1,8 @@
-﻿namespace CommonModel.Runtime.Core.Configuration;
+namespace CommonModel.Runtime.Core.Configuration;
 
 public class ConnectorOptions
 {
-    public string ConnectorId { get; set; } = "";
+    public string DriverId { get; set; } = "";
     public string SourceType { get; set; } = "";
     public bool Enabled { get; set; } = true;
     public string? Description { get; set; }
@@ -15,7 +15,7 @@ public class ConnectorOptions
 public class NatsOptions
 {
     public string[] Servers { get; set; } = ["nats://localhost:4222"];
-    public string SubjectPrefix { get; set; } = "universal-connector";
+    public string SubjectPrefix { get; set; } = "cdc";
     public bool UseJetStream { get; set; } = false;
     public string? CredsFile { get; set; }
 }

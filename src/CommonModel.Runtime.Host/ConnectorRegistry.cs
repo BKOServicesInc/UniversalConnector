@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging;
 using CommonModel.Runtime.Core.Abstractions;
 using CommonModel.Runtime.Drivers.Generic.Engine;
 
@@ -6,12 +6,12 @@ namespace CommonModel.Runtime.Host;
 
 public sealed class ConnectorRegistry : IConnectorRegistry
 {
-    private readonly List<IConnectorFactory> _factories;
+    private readonly List<IDriverFactory> _factories;
     private readonly DescriptorStore _descriptorStore;
     private readonly ILogger<ConnectorRegistry> _logger;
 
     public ConnectorRegistry(
-        IEnumerable<IConnectorFactory> factories,
+        IEnumerable<IDriverFactory> factories,
         DescriptorStore descriptorStore,
         ILogger<ConnectorRegistry> logger)
     {
@@ -20,9 +20,9 @@ public sealed class ConnectorRegistry : IConnectorRegistry
         _logger = logger;
     }
 
-    public void Register(IConnectorFactory factory) => _factories.Add(factory);
+    public void Register(IDriverFactory factory) => _factories.Add(factory);
 
-    public IDataSourceConnector? Resolve(string connectorId, string sourceType)
+    public ISourceDriver? Resolve(string driverId, string sourceType)
     {
         var factory = _factories.FirstOrDefault(f =>
             string.Equals(f.SourceType, sourceType, StringComparison.OrdinalIgnoreCase))
@@ -30,34 +30,34 @@ public sealed class ConnectorRegistry : IConnectorRegistry
 
         if (factory is null)
         {
-            _logger.LogWarning("No factory found for connectorId '{Id}' sourceType '{Type}'",
-                connectorId, sourceType);
+            _logger.LogWarning("No factory found for driverId '{Id}' sourceType '{Type}'",
+                driverId, sourceType);
             return null;
         }
 
-        return factory.Create(connectorId);
+        return factory.Create(driverId);
     }
 
-    public IReadOnlyList<IDataSourceConnector> ResolveAll()
+    public IReadOnlyList<ISourceDriver> ResolveAll()
     {
-        var connectors = new List<IDataSourceConnector>();
+        var drivers = new List<ISourceDriver>();
         var genericFactory = _factories.FirstOrDefault(f => f.SourceType == "*");
 
-        if (genericFactory is null) return connectors;
+        if (genericFactory is null) return drivers;
 
         foreach (var descriptor in _descriptorStore.GetEnabled())
         {
             try
             {
-                var connector = genericFactory.Create(descriptor.ConnectorId);
-                connectors.Add(connector);
+                var driver = genericFactory.Create(descriptor.ConnectorId);
+                drivers.Add(driver);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to create connector for '{ConnectorId}'", descriptor.ConnectorId);
+                _logger.LogError(ex, "Failed to create driver for '{ConnectorId}'", descriptor.ConnectorId);
             }
         }
 
-        return connectors;
+        return drivers;
     }
 }

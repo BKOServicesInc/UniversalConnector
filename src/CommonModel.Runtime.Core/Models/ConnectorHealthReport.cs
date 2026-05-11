@@ -1,6 +1,6 @@
-﻿namespace CommonModel.Runtime.Core.Models;
+namespace CommonModel.Runtime.Core.Models;
 
-public enum ConnectorState
+public enum DriverState
 {
     Disconnected,
     Connecting,
@@ -10,11 +10,11 @@ public enum ConnectorState
     Failed
 }
 
-public sealed class ConnectorHealthReport
+public sealed class HealthStatus
 {
-    public required string ConnectorId { get; init; }
+    public required string DriverId { get; init; }
     public required string SourceType { get; init; }
-    public ConnectorState State { get; init; }
+    public DriverState State { get; init; }
     public DateTimeOffset LastChecked { get; init; } = DateTimeOffset.UtcNow;
     public DateTimeOffset? LastEventAt { get; init; }
     public long TotalEventsEmitted { get; init; }

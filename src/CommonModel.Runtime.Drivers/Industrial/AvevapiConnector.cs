@@ -1,5 +1,6 @@
-﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using System.Composition;
 using System.Net.Http.Json;
 using System.Runtime.CompilerServices;
 using System.Text;
@@ -19,6 +20,7 @@ public sealed class AvevapiConnectorOptions : Core.Configuration.ConnectorOption
     public List<string> TagWebIds { get; set; } = new();
 }
 
+[Export(typeof(ISourceDriver))]
 public sealed class AvevapiConnector : BaseConnector
 {
     private readonly AvevapiConnectorOptions _options;
@@ -27,7 +29,7 @@ public sealed class AvevapiConnector : BaseConnector
     public AvevapiConnector(IOptions<AvevapiConnectorOptions> options, ILogger<AvevapiConnector> logger)
         : base(logger) => _options = options.Value;
 
-    public override string ConnectorId => _options.ConnectorId;
+    public override string DriverId => _options.DriverId;
     public override string SourceType => "avevapi";
 
     protected override Task ConnectCoreAsync(CancellationToken ct)
@@ -39,7 +41,7 @@ public sealed class AvevapiConnector : BaseConnector
 
     protected override Task DisconnectCoreAsync(CancellationToken ct) => Task.CompletedTask;
 
-    protected override async IAsyncEnumerable<DataChangeEvent> PollOrStreamAsync(
+    protected override async IAsyncEnumerable<RawChangeEvent> PollOrStreamAsync(
         [EnumeratorCancellation] CancellationToken ct)
     {
         var interval = TimeSpan.FromSeconds(_options.PollIntervalSeconds);
@@ -65,15 +67,15 @@ public sealed class AvevapiConnector : BaseConnector
                             : since;
                         if (ts > maxWm) maxWm = ts;
 
-                        yield return new DataChangeEvent
+                        yield return new RawChangeEvent
                         {
                             SourceType = SourceType,
-                            ConnectorId = ConnectorId,
+                            DriverId = DriverId,
                             EntityPath = webId,
                             ChangeType = ChangeType.Snapshot,
                             SourceTimestamp = ts,
                             PrimaryKey = new Dictionary<string, object?> { ["webId"] = webId },
-                            Payload = new Dictionary<string, object?>
+                            Fields = new Dictionary<string, object?>
                             {
                                 ["value"] = item.TryGetProperty("Value", out var v) ? v.GetRawText() : null,
                                 ["timestamp"] = ts

@@ -1,5 +1,6 @@
-﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using System.Composition;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Runtime.CompilerServices;
@@ -20,6 +21,7 @@ public sealed class SapConnectorOptions : Core.Configuration.ConnectorOptions
     public List<string> EntitySets { get; set; } = new();
 }
 
+[Export(typeof(ISourceDriver))]
 public sealed class SapConnector : BaseConnector
 {
     private readonly SapConnectorOptions _options;
@@ -29,7 +31,7 @@ public sealed class SapConnector : BaseConnector
     public SapConnector(IOptions<SapConnectorOptions> options, ILogger<SapConnector> logger)
         : base(logger) => _options = options.Value;
 
-    public override string ConnectorId => _options.ConnectorId;
+    public override string DriverId => _options.DriverId;
     public override string SourceType => "sap";
 
     protected override Task ConnectCoreAsync(CancellationToken ct)
@@ -43,7 +45,7 @@ public sealed class SapConnector : BaseConnector
 
     protected override Task DisconnectCoreAsync(CancellationToken ct) => Task.CompletedTask;
 
-    protected override async IAsyncEnumerable<DataChangeEvent> PollOrStreamAsync(
+    protected override async IAsyncEnumerable<RawChangeEvent> PollOrStreamAsync(
         [EnumeratorCancellation] CancellationToken ct)
     {
         var interval = TimeSpan.FromSeconds(_options.PollIntervalSeconds);
@@ -75,14 +77,14 @@ public sealed class SapConnector : BaseConnector
                             };
                         }
 
-                        yield return new DataChangeEvent
+                        yield return new RawChangeEvent
                         {
                             SourceType = SourceType,
-                            ConnectorId = ConnectorId,
+                            DriverId = DriverId,
                             EntityPath = entitySet,
                             ChangeType = ChangeType.Update,
                             PrimaryKey = new Dictionary<string, object?>(),
-                            Payload = fields
+                            Fields = fields
                         };
                     }
                 }

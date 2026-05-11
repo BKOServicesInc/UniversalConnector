@@ -1,6 +1,7 @@
-﻿using Microsoft.Data.SqlClient;
+using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using System.Composition;
 using System.Runtime.CompilerServices;
 using CommonModel.Runtime.Core.Abstractions;
 using CommonModel.Runtime.Core.Models;
@@ -15,6 +16,7 @@ public sealed class SqlServerConnectorOptions : Core.Configuration.ConnectorOpti
     public List<string> Tables { get; set; } = new();
 }
 
+[Export(typeof(ISourceDriver))]
 public sealed class SqlServerConnector : BaseConnector
 {
     private readonly SqlServerConnectorOptions _options;
@@ -22,7 +24,7 @@ public sealed class SqlServerConnector : BaseConnector
     public SqlServerConnector(IOptions<SqlServerConnectorOptions> options, ILogger<SqlServerConnector> logger)
         : base(logger) => _options = options.Value;
 
-    public override string ConnectorId => _options.ConnectorId;
+    public override string DriverId => _options.DriverId;
     public override string SourceType => "sqlserver";
 
     protected override int MaxConsecutiveFailures => _options.MaxConsecutiveFailures;
@@ -30,7 +32,7 @@ public sealed class SqlServerConnector : BaseConnector
     protected override Task ConnectCoreAsync(CancellationToken ct) => Task.CompletedTask;
     protected override Task DisconnectCoreAsync(CancellationToken ct) => Task.CompletedTask;
 
-    protected override async IAsyncEnumerable<DataChangeEvent> PollOrStreamAsync(
+    protected override async IAsyncEnumerable<RawChangeEvent> PollOrStreamAsync(
         [EnumeratorCancellation] CancellationToken ct)
     {
         var interval = TimeSpan.FromSeconds(_options.PollIntervalSeconds);
@@ -63,14 +65,14 @@ public sealed class SqlServerConnector : BaseConnector
                         if (wmOffset > maxWm) maxWm = wmOffset;
                     }
 
-                    yield return new DataChangeEvent
+                    yield return new RawChangeEvent
                     {
                         SourceType = SourceType,
-                        ConnectorId = ConnectorId,
+                        DriverId = DriverId,
                         EntityPath = table,
                         ChangeType = ChangeType.Snapshot,
                         PrimaryKey = new Dictionary<string, object?>(),
-                        Payload = fields
+                        Fields = fields
                     };
                 }
 

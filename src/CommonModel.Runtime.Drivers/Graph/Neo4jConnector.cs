@@ -1,6 +1,7 @@
-﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Neo4j.Driver;
+using System.Composition;
 using System.Runtime.CompilerServices;
 using CommonModel.Runtime.Core.Abstractions;
 using CommonModel.Runtime.Core.Models;
@@ -17,6 +18,7 @@ public sealed class Neo4jConnectorOptions : Core.Configuration.ConnectorOptions
     public List<string> Labels { get; set; } = new();
 }
 
+[Export(typeof(ISourceDriver))]
 public sealed class Neo4jConnector : BaseConnector
 {
     private readonly Neo4jConnectorOptions _options;
@@ -25,7 +27,7 @@ public sealed class Neo4jConnector : BaseConnector
     public Neo4jConnector(IOptions<Neo4jConnectorOptions> options, ILogger<Neo4jConnector> logger)
         : base(logger) => _options = options.Value;
 
-    public override string ConnectorId => _options.ConnectorId;
+    public override string DriverId => _options.DriverId;
     public override string SourceType => "neo4j";
 
     protected override Task ConnectCoreAsync(CancellationToken ct)
@@ -43,7 +45,7 @@ public sealed class Neo4jConnector : BaseConnector
         }
     }
 
-    protected override async IAsyncEnumerable<DataChangeEvent> PollOrStreamAsync(
+    protected override async IAsyncEnumerable<RawChangeEvent> PollOrStreamAsync(
         [EnumeratorCancellation] CancellationToken ct)
     {
         var interval = TimeSpan.FromSeconds(_options.PollIntervalSeconds);
@@ -78,14 +80,14 @@ public sealed class Neo4jConnector : BaseConnector
                         if (wmOffset > maxWm) maxWm = wmOffset;
                     }
 
-                    yield return new DataChangeEvent
+                    yield return new RawChangeEvent
                     {
                         SourceType = SourceType,
-                        ConnectorId = ConnectorId,
+                        DriverId = DriverId,
                         EntityPath = label,
                         ChangeType = ChangeType.Snapshot,
                         PrimaryKey = new Dictionary<string, object?> { ["id"] = node.ElementId },
-                        Payload = fields
+                        Fields = fields
                     };
                 }
 

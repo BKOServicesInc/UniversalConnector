@@ -1,14 +1,14 @@
-﻿namespace CommonModel.Runtime.Core.Abstractions;
+namespace CommonModel.Runtime.Core.Abstractions;
 
-public interface IConnectorFactory
+public interface IDriverFactory
 {
     string SourceType { get; }
-    IDataSourceConnector Create(string connectorId);
+    ISourceDriver Create(string driverId);
 }
 
 public interface IConnectorRegistry
 {
-    void Register(IConnectorFactory factory);
-    IDataSourceConnector? Resolve(string connectorId, string sourceType);
-    IReadOnlyList<IDataSourceConnector> ResolveAll();
+    void Register(IDriverFactory factory);
+    ISourceDriver? Resolve(string driverId, string sourceType);
+    IReadOnlyList<ISourceDriver> ResolveAll();
 }
