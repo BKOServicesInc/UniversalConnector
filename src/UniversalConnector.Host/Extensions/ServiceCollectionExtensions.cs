@@ -3,7 +3,6 @@ using Microsoft.Extensions.DependencyInjection;
 using UniversalConnector.Core.Abstractions;
 using UniversalConnector.Core.Configuration;
 using UniversalConnector.Generic.Extensions;
-using UniversalConnector.Host.Services;
 using UniversalConnector.Nats;
 
 namespace UniversalConnector.Host.Extensions;
@@ -16,9 +15,6 @@ public static class ServiceCollectionExtensions
     {
         services.Configure<NatsOptions>(configuration.GetSection("Nats"));
         services.AddSingleton<INatsPublisher, NatsPublisher>();
-
-        services.Configure<PostgresSinkOptions>(configuration.GetSection("PostgresSink"));
-        services.AddSingleton<IDataSink, PostgresDataSink>();
 
         services.AddGenericConnector();
 
