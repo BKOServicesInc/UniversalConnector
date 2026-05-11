@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using CommonModel.Runtime.Core.Descriptors;
@@ -41,10 +41,10 @@ public sealed class DescriptorBootstrapService : IHostedService
                 loaded++;
 
                 foreach (var w in result.Warnings)
-                    _logger.LogWarning("[{ConnectorId}] {Warning}", result.Descriptor.ConnectorId, w);
+                    _logger.LogWarning("[{DriverId}] {Warning}", result.Descriptor.DriverId, w);
 
-                _logger.LogInformation("Loaded descriptor '{ConnectorId}' ({SourceType})",
-                    result.Descriptor.ConnectorId, result.Descriptor.SourceType);
+                _logger.LogInformation("Loaded descriptor '{DriverId}' ({SourceType}) context='{Context}'",
+                    result.Descriptor.DriverId, result.Descriptor.SourceType, result.Descriptor.Context);
             }
             else
             {

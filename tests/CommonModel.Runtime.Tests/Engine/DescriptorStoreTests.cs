@@ -1,4 +1,4 @@
-﻿using CommonModel.Runtime.Core.Descriptors;
+using CommonModel.Runtime.Core.Descriptors;
 using CommonModel.Runtime.Drivers.Generic.Engine;
 
 namespace CommonModel.Runtime.Tests.Engine;
@@ -87,5 +87,5 @@ public class DescriptorStoreTests
     }
 
     private static ConnectorDescriptor Descriptor(string id, bool enabled = true) =>
-        new() { ConnectorId = id, SourceType = "postgres", Enabled = enabled };
+        new() { DriverId = id, Context = "ctx:test", SourceType = "postgres", Enabled = enabled };
 }

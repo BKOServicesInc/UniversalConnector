@@ -168,7 +168,7 @@ public sealed class PostgresAdapter : BaseProtocolAdapter
         {
             foreach (var entity in entities)
             {
-                var wmKey = $"{descriptor.ConnectorId}:{entity}";
+                var wmKey = $"{descriptor.DriverId}:{entity}";
                 if (!_watermarks.TryGetValue(wmKey, out var since))
                     since = DateTimeOffset.UtcNow - ParseDuration(descriptor.ChangeDetection.LookbackDuration);
 

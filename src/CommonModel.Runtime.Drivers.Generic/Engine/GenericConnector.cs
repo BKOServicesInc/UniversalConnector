@@ -32,7 +32,7 @@ public sealed class GenericConnector : BaseConnector
         _fieldMapper = fieldMapper;
     }
 
-    public override string DriverId => _descriptor.ConnectorId;
+    public override string DriverId => _descriptor.DriverId;
     public override string SourceType => _descriptor.SourceType;
 
     protected override int MaxConsecutiveFailures => _descriptor.Resilience.MaxConsecutiveFailures;
@@ -73,7 +73,7 @@ public sealed class GenericConnector : BaseConnector
             yield return new RawChangeEvent
             {
                 SourceType = _descriptor.SourceType,
-                DriverId = _descriptor.ConnectorId,
+                DriverId = _descriptor.DriverId,
                 EntityPath = raw.EntityPath,
                 ChangeType = raw.ChangeType,
                 SourceTimestamp = raw.SourceTimestamp,

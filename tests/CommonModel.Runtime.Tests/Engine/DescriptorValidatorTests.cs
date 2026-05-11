@@ -1,4 +1,4 @@
-﻿using CommonModel.Runtime.Core.Descriptors;
+using CommonModel.Runtime.Core.Descriptors;
 using CommonModel.Runtime.Drivers.Generic.Engine;
 
 namespace CommonModel.Runtime.Tests.Engine;
@@ -35,12 +35,21 @@ public class DescriptorValidatorTests
     // ── Required field errors ─────────────────────────────────────────────────
 
     [Fact]
-    public void Validate_MissingConnectorId_ReturnsError()
+    public void Validate_MissingDriverId_ReturnsError()
     {
-        var d = Postgres(); d.ConnectorId = "";
+        var d = Postgres(); d.DriverId = "";
         var r = _sut.Validate(d);
         r.IsValid.Should().BeFalse();
-        r.Errors.Should().Contain(e => e.Contains("connectorId"));
+        r.Errors.Should().Contain(e => e.Contains("driverId"));
+    }
+
+    [Fact]
+    public void Validate_MissingContext_ReturnsError()
+    {
+        var d = Postgres(); d.Context = "";
+        var r = _sut.Validate(d);
+        r.IsValid.Should().BeFalse();
+        r.Errors.Should().Contain(e => e.Contains("context"));
     }
 
     [Fact]
@@ -119,9 +128,10 @@ public class DescriptorValidatorTests
     {
         var d = new ConnectorDescriptor
         {
-            ConnectorId = "pg",
-            SourceType  = "postgres",
-            Connection  = new() { ConnectionString = "Host=localhost;Database=db;Username=u;" }
+            DriverId   = "pg",
+            Context    = "ctx:test",
+            SourceType = "postgres",
+            Connection = new() { ConnectionString = "Host=localhost;Database=db;Username=u;" }
         };
         _sut.Validate(d).IsValid.Should().BeTrue();
     }
@@ -198,33 +208,34 @@ public class DescriptorValidatorTests
 
     private static ConnectorDescriptor Postgres() => new()
     {
-        ConnectorId = "test-pg",
-        SourceType  = "postgres",
-        Connection  = new() { Host = "localhost", Database = "testdb", Username = "postgres" }
+        DriverId   = "test-pg",
+        Context    = "ctx:test",
+        SourceType = "postgres",
+        Connection = new() { Host = "localhost", Database = "testdb", Username = "postgres" }
     };
 
     private static ConnectorDescriptor FullDescriptor(string sourceType) => sourceType.ToLower() switch
     {
-        "postgres"   => new() { ConnectorId = "t", SourceType = "postgres",
-                                Connection  = new() { Host = "h", Database = "d", Username = "u" } },
-        "sqlserver"  => new() { ConnectorId = "t", SourceType = "sqlserver",
-                                Connection  = new() { Host = "h", Database = "d" } },
-        "neo4j"      => new() { ConnectorId = "t", SourceType = "neo4j",
-                                Connection  = new() { Uri = "bolt://localhost", Username = "neo4j" } },
-        "mongodb"    => new() { ConnectorId = "t", SourceType = "mongodb",
-                                Connection  = new() { Uri = "mongodb://localhost", Database = "db" } },
-        "databricks" => new() { ConnectorId = "t", SourceType = "databricks",
-                                Connection  = new() { Host = "h", HttpPath = "/p", ApiToken = "tok" } },
-        "seeq"       => new() { ConnectorId = "t", SourceType = "seeq",
-                                Connection  = new() { BaseUrl = "https://seeq", Username = "u" } },
-        "avevapi"    => new() { ConnectorId = "t", SourceType = "avevapi",
-                                Connection  = new() { BaseUrl = "https://pi", PiServerName = "srv" } },
-        "sharepoint" => new() { ConnectorId = "t", SourceType = "sharepoint",
-                                Connection  = new() { TenantId = "tid", ClientId = "cid",
-                                                      ClientSecret = "sec", BaseUrl = "https://sp" },
+        "postgres"   => new() { DriverId = "t", Context = "ctx:test", SourceType = "postgres",
+                                Connection = new() { Host = "h", Database = "d", Username = "u" } },
+        "sqlserver"  => new() { DriverId = "t", Context = "ctx:test", SourceType = "sqlserver",
+                                Connection = new() { Host = "h", Database = "d" } },
+        "neo4j"      => new() { DriverId = "t", Context = "ctx:test", SourceType = "neo4j",
+                                Connection = new() { Uri = "bolt://localhost", Username = "neo4j" } },
+        "mongodb"    => new() { DriverId = "t", Context = "ctx:test", SourceType = "mongodb",
+                                Connection = new() { Uri = "mongodb://localhost", Database = "db" } },
+        "databricks" => new() { DriverId = "t", Context = "ctx:test", SourceType = "databricks",
+                                Connection = new() { Host = "h", HttpPath = "/p", ApiToken = "tok" } },
+        "seeq"       => new() { DriverId = "t", Context = "ctx:test", SourceType = "seeq",
+                                Connection = new() { BaseUrl = "https://seeq", Username = "u" } },
+        "avevapi"    => new() { DriverId = "t", Context = "ctx:test", SourceType = "avevapi",
+                                Connection = new() { BaseUrl = "https://pi", PiServerName = "srv" } },
+        "sharepoint" => new() { DriverId = "t", Context = "ctx:test", SourceType = "sharepoint",
+                                Connection = new() { TenantId = "tid", ClientId = "cid",
+                                                     ClientSecret = "sec", BaseUrl = "https://sp" },
                                 ChangeDetection = new() { Mode = "delta" } },
-        "sap"        => new() { ConnectorId = "t", SourceType = "sap",
-                                Connection  = new() { BaseUrl = "https://sap", Username = "u" },
+        "sap"        => new() { DriverId = "t", Context = "ctx:test", SourceType = "sap",
+                                Connection = new() { BaseUrl = "https://sap", Username = "u" },
                                 ChangeDetection = new() { Mode = "delta" } },
         _            => throw new ArgumentException($"Unknown type: {sourceType}")
     };

@@ -1,4 +1,4 @@
-﻿using CommonModel.Runtime.Core.Descriptors;
+using CommonModel.Runtime.Core.Descriptors;
 
 namespace CommonModel.Runtime.Drivers.Generic.Engine;
 
@@ -27,8 +27,11 @@ public sealed class DescriptorValidator
         var errors = new List<string>();
         var warnings = new List<string>();
 
-        if (string.IsNullOrWhiteSpace(d.ConnectorId))
-            errors.Add("connectorId is required");
+        if (string.IsNullOrWhiteSpace(d.DriverId))
+            errors.Add("driverId is required");
+
+        if (string.IsNullOrWhiteSpace(d.Context))
+            errors.Add("context is required (e.g. ctx:MyProcess)");
 
         if (string.IsNullOrWhiteSpace(d.SourceType))
         {

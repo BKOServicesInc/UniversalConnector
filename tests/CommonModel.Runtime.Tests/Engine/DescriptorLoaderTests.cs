@@ -1,4 +1,4 @@
-﻿using CommonModel.Runtime.Drivers.Generic.Engine;
+using CommonModel.Runtime.Drivers.Generic.Engine;
 
 namespace CommonModel.Runtime.Tests.Engine;
 
@@ -16,7 +16,8 @@ public class DescriptorLoaderTests : IDisposable
     public void LoadFromString_ValidYaml_ReturnsParsedDescriptor()
     {
         var yaml = """
-            connectorId: my-connector
+            driverId: my-connector
+            context: ctx:test
             sourceType: postgres
             connection:
               host: localhost
@@ -27,15 +28,17 @@ public class DescriptorLoaderTests : IDisposable
         var r = _sut.LoadFromString(yaml);
 
         r.Success.Should().BeTrue();
-        r.Descriptor!.ConnectorId.Should().Be("my-connector");
+        r.Descriptor!.DriverId.Should().Be("my-connector");
         r.Descriptor.SourceType.Should().Be("postgres");
+        r.Descriptor.Context.Should().Be("ctx:test");
     }
 
     [Fact]
     public void LoadFromString_ValidYaml_ParsesConnectionFields()
     {
         var yaml = """
-            connectorId: pg
+            driverId: pg
+            context: ctx:test
             sourceType: postgres
             connection:
               host: myhost
@@ -57,7 +60,8 @@ public class DescriptorLoaderTests : IDisposable
     public void LoadFromString_ValidYaml_ParsesWatchEntities()
     {
         var yaml = """
-            connectorId: pg
+            driverId: pg
+            context: ctx:test
             sourceType: postgres
             connection:
               host: h
@@ -82,7 +86,8 @@ public class DescriptorLoaderTests : IDisposable
     public void LoadFromString_ValidYaml_ParsesFieldMappingRules()
     {
         var yaml = """
-            connectorId: pg
+            driverId: pg
+            context: ctx:test
             sourceType: postgres
             connection:
               host: h
@@ -113,7 +118,8 @@ public class DescriptorLoaderTests : IDisposable
     {
         var json = """
             {
-              "connectorId": "json-connector",
+              "driverId": "json-connector",
+              "context": "ctx:test",
               "sourceType": "postgres",
               "connection": { "host": "h", "database": "d", "username": "u" }
             }
@@ -122,7 +128,7 @@ public class DescriptorLoaderTests : IDisposable
         var r = _sut.LoadFromString(json, format: "json");
 
         r.Success.Should().BeTrue();
-        r.Descriptor!.ConnectorId.Should().Be("json-connector");
+        r.Descriptor!.DriverId.Should().Be("json-connector");
     }
 
     // ── Environment variable interpolation ───────────────────────────────────
@@ -133,7 +139,8 @@ public class DescriptorLoaderTests : IDisposable
         Environment.SetEnvironmentVariable("TEST_DB_PASSWORD", "supersecret");
 
         var yaml = """
-            connectorId: pg
+            driverId: pg
+            context: ctx:test
             sourceType: postgres
             connection:
               host: h
@@ -156,7 +163,8 @@ public class DescriptorLoaderTests : IDisposable
         Environment.SetEnvironmentVariable("MISSING_VAR_XYZ", null);
 
         var yaml = """
-            connectorId: pg
+            driverId: pg
+            context: ctx:test
             sourceType: postgres
             connection:
               host: ${MISSING_VAR_XYZ}
@@ -173,10 +181,11 @@ public class DescriptorLoaderTests : IDisposable
     // ── Validation integration ────────────────────────────────────────────────
 
     [Fact]
-    public void LoadFromString_DescriptorFailsValidation_ReturnsFail()
+    public void LoadFromString_DescriptorMissingDriverId_ReturnsFail()
     {
         var yaml = """
-            connectorId: ""
+            driverId: ""
+            context: ctx:test
             sourceType: postgres
             connection:
               host: h
@@ -187,7 +196,25 @@ public class DescriptorLoaderTests : IDisposable
         var r = _sut.LoadFromString(yaml);
 
         r.Success.Should().BeFalse();
-        r.Error.Should().Contain("connectorId");
+        r.Error.Should().Contain("driverId");
+    }
+
+    [Fact]
+    public void LoadFromString_DescriptorMissingContext_ReturnsFail()
+    {
+        var yaml = """
+            driverId: pg
+            sourceType: postgres
+            connection:
+              host: h
+              database: d
+              username: u
+            """;
+
+        var r = _sut.LoadFromString(yaml);
+
+        r.Success.Should().BeFalse();
+        r.Error.Should().Contain("context");
     }
 
     [Fact]
@@ -227,7 +254,8 @@ public class DescriptorLoaderTests : IDisposable
     public async Task LoadFromDirectoryAsync_MixedValidAndInvalid_ReturnsAllResults()
     {
         await File.WriteAllTextAsync(Path.Combine(_tempDir, "good.yaml"), ValidYaml("good"));
-        await File.WriteAllTextAsync(Path.Combine(_tempDir, "bad.yaml"), "connectorId: \"\"\nsourceType: postgres\n");
+        await File.WriteAllTextAsync(Path.Combine(_tempDir, "bad.yaml"),
+            "driverId: \"\"\ncontext: ctx:test\nsourceType: postgres\n");
 
         var results = await _sut.LoadFromDirectoryAsync(_tempDir, CancellationToken.None);
 
@@ -238,8 +266,9 @@ public class DescriptorLoaderTests : IDisposable
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    private static string ValidYaml(string connectorId) => $"""
-        connectorId: {connectorId}
+    private static string ValidYaml(string driverId) => $"""
+        driverId: {driverId}
+        context: ctx:test
         sourceType: postgres
         connection:
           host: localhost

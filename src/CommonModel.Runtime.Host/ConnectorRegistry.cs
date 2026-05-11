@@ -49,12 +49,12 @@ public sealed class ConnectorRegistry : IConnectorRegistry
         {
             try
             {
-                var driver = genericFactory.Create(descriptor.ConnectorId);
+                var driver = genericFactory.Create(descriptor.DriverId);
                 drivers.Add(driver);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to create driver for '{ConnectorId}'", descriptor.ConnectorId);
+                _logger.LogError(ex, "Failed to create driver for '{DriverId}'", descriptor.DriverId);
             }
         }
 

@@ -1,11 +1,14 @@
-﻿using YamlDotNet.Serialization;
+using YamlDotNet.Serialization;
 
 namespace CommonModel.Runtime.Core.Descriptors;
 
 public sealed class ConnectorDescriptor
 {
-    [YamlMember(Alias = "connectorId")]
-    public string ConnectorId { get; set; } = "";
+    [YamlMember(Alias = "driverId")]
+    public string DriverId { get; set; } = "";
+
+    [YamlMember(Alias = "context")]
+    public string Context { get; set; } = "";
 
     [YamlMember(Alias = "sourceType")]
     public string SourceType { get; set; } = "";
@@ -163,6 +166,12 @@ public sealed class FieldMappingRule
 
 public sealed class NatsDescriptorConfig
 {
+    /// <summary>
+    /// Subject template following the AssetLink hierarchy: cdc.{context}.{aspectPath}.{eventType}
+    /// </summary>
+    [YamlMember(Alias = "subjectTemplate")]
+    public string? SubjectTemplate { get; set; }
+
     [YamlMember(Alias = "subjectOverride")]
     public string? SubjectOverride { get; set; }
 

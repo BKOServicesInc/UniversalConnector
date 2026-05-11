@@ -1,0 +1,131 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:commonmodel:runtime:connector-descriptor:v1",
+  "title": "CommonModel.Runtime Connector Descriptor",
+  "description": "Per-connector YAML/JSON configuration for an AssetLink CommonModel.Runtime source driver",
+  "type": "object",
+  "required": ["driverId", "context", "sourceType"],
+  "additionalProperties": true,
+  "properties": {
+    "driverId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Unique identifier for this driver instance (used in NATS subjects and checkpoints)"
+    },
+    "context": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Ontology context this connector publishes into (e.g. ctx:PID, ctx:AF-Process)"
+    },
+    "sourceType": {
+      "type": "string",
+      "enum": ["postgres", "sqlserver", "neo4j", "databricks", "seeq", "avevapi", "sharepoint", "sap", "mongodb"],
+      "description": "Source system type"
+    },
+    "description": {
+      "type": "string"
+    },
+    "enabled": {
+      "type": "boolean",
+      "default": true
+    },
+    "connection": {
+      "type": "object",
+      "description": "Source system connection settings. Secrets should use ${ENV_VAR} interpolation.",
+      "additionalProperties": true,
+      "properties": {
+        "connectionString": { "type": "string" },
+        "host":             { "type": "string" },
+        "port":             { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "database":         { "type": "string" },
+        "username":         { "type": "string" },
+        "password":         { "type": "string" },
+        "baseUrl":          { "type": "string" },
+        "apiToken":         { "type": "string" },
+        "tenantId":         { "type": "string" },
+        "clientId":         { "type": "string" },
+        "clientSecret":     { "type": "string" },
+        "httpPath":         { "type": "string" },
+        "uri":              { "type": "string" },
+        "verifySsl":        { "type": "boolean", "default": true },
+        "sslCertPath":      { "type": "string" },
+        "sapClient":        { "type": "string" },
+        "piServerName":     { "type": "string" }
+      }
+    },
+    "changeDetection": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "mode":                      { "type": "string", "enum": ["cdc", "polling", "delta"] },
+        "pollIntervalSeconds":       { "type": "integer", "minimum": 1, "default": 30 },
+        "watermarkColumn":           { "type": "string", "default": "updated_at" },
+        "lookbackDuration":          { "type": "string", "default": "PT1H" },
+        "replicationSlot":           { "type": "string" },
+        "publication":               { "type": "string" },
+        "startingVersion":           { "type": "integer", "default": -1 },
+        "autoEnableChangeTracking":  { "type": "boolean", "default": true }
+      }
+    },
+    "watch": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "autoDiscover": { "type": "boolean", "default": false },
+        "entities": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name"],
+            "additionalProperties": true,
+            "properties": {
+              "name":                    { "type": "string", "minLength": 1 },
+              "primaryKey":              { "type": "array", "items": { "type": "string" } },
+              "filter":                  { "type": "string" },
+              "changeDetectionOverride": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "fieldMapping": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["source"],
+        "additionalProperties": false,
+        "properties": {
+          "source":      { "type": "string", "minLength": 1 },
+          "target":      { "type": "string" },
+          "type":        { "type": "string", "enum": ["string", "int", "long", "double", "bool", "timestamp", "date"] },
+          "exclude":     { "type": "boolean", "default": false },
+          "isKey":       { "type": "boolean", "default": false },
+          "staticValue": {}
+        }
+      }
+    },
+    "nats": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "subjectTemplate":    {
+          "type": "string",
+          "description": "NATS subject template. Use {context}, {aspectPath}, {eventType} tokens. Defaults to cdc.{context}.{entityPath}.{changeType}."
+        },
+        "subjectOverride":    { "type": "string" },
+        "serializationFormat": { "type": "string", "enum": ["json", "protobuf"], "default": "json" },
+        "additionalHeaders":  { "type": "object", "additionalProperties": { "type": "string" } }
+      }
+    },
+    "resilience": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "maxConsecutiveFailures": { "type": "integer", "minimum": 1, "default": 5 },
+        "retryDelaySeconds":      { "type": "integer", "minimum": 0, "default": 10 },
+        "backoffMultiplier":      { "type": "number",  "minimum": 1, "default": 1.5 },
+        "maxRetryDelaySeconds":   { "type": "integer", "minimum": 1, "default": 120 }
+      }
+    }
+  }
+}
