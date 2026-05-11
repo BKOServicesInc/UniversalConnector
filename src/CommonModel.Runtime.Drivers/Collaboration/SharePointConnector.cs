@@ -79,6 +79,7 @@ public sealed class SharePointConnector : BaseConnector
                         {
                             SourceType = SourceType,
                             DriverId = DriverId,
+                            Context = _options.Context,
                             EntityPath = listName,
                             ChangeType = deleted ? ChangeType.Delete : ChangeType.Update,
                             PrimaryKey = new Dictionary<string, object?> { ["id"] = fields.GetValueOrDefault("id") },

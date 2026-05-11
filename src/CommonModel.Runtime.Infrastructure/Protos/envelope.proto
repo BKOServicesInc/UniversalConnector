@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package commonmodel.runtime.v1;
+
+option csharp_namespace = "CommonModel.Runtime.Infrastructure.Wire";
+
+import "google/protobuf/timestamp.proto";
+
+message Envelope {
+  string event_id = 1;
+  google.protobuf.Timestamp detected_at = 2;
+  google.protobuf.Timestamp source_timestamp = 3;
+  string source_type = 4;
+  string driver_id = 5;
+  string context = 6;
+  string entity_path = 7;
+  string change_type = 8;
+  map<string, string> primary_key = 9;
+  map<string, string> fields = 10;
+  map<string, string> previous_fields = 11;
+  map<string, string> metadata = 12;
+  int64 sequence_number = 13;
+}

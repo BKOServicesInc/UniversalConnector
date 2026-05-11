@@ -84,6 +84,7 @@ public sealed class Neo4jConnector : BaseConnector
                     {
                         SourceType = SourceType,
                         DriverId = DriverId,
+                        Context = _options.Context,
                         EntityPath = label,
                         ChangeType = ChangeType.Snapshot,
                         PrimaryKey = new Dictionary<string, object?> { ["id"] = node.ElementId },

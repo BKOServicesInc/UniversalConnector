@@ -12,11 +12,12 @@ public enum ChangeType
 
 public sealed record RawChangeEvent
 {
-    public string EventId { get; init; } = Guid.NewGuid().ToString();
+    public string EventId { get; init; } = Ulid.NewUlid().ToString();
     public DateTimeOffset DetectedAt { get; init; } = DateTimeOffset.UtcNow;
     public DateTimeOffset? SourceTimestamp { get; init; }
     public required string SourceType { get; init; }
     public required string DriverId { get; init; }
+    public string Context { get; init; } = "";
     public required string EntityPath { get; init; }
     public ChangeType ChangeType { get; init; }
     public IReadOnlyDictionary<string, object?> PrimaryKey { get; init; } = new Dictionary<string, object?>();

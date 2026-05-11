@@ -74,6 +74,7 @@ public sealed class GenericConnector : BaseConnector
             {
                 SourceType = _descriptor.SourceType,
                 DriverId = _descriptor.DriverId,
+                Context = _descriptor.Context,
                 EntityPath = raw.EntityPath,
                 ChangeType = raw.ChangeType,
                 SourceTimestamp = raw.SourceTimestamp,

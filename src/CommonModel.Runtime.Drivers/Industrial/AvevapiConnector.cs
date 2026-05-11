@@ -71,6 +71,7 @@ public sealed class AvevapiConnector : BaseConnector
                         {
                             SourceType = SourceType,
                             DriverId = DriverId,
+                            Context = _options.Context,
                             EntityPath = webId,
                             ChangeType = ChangeType.Snapshot,
                             SourceTimestamp = ts,

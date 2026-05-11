@@ -77,6 +77,7 @@ public sealed class DatabricksConnector : BaseConnector
                     {
                         SourceType = SourceType,
                         DriverId = DriverId,
+                        Context = _options.Context,
                         EntityPath = table,
                         ChangeType = ChangeType.Snapshot,
                         SourceTimestamp = maxWm,

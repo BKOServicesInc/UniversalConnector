@@ -12,8 +12,14 @@
 
   <ItemGroup>
     <PackageReference Include="NATS.Net" Version="2.*" />
+    <PackageReference Include="Google.Protobuf" Version="3.27.1" />
+    <PackageReference Include="Grpc.Tools" Version="2.65.0" PrivateAssets="All" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.7" />
     <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.7" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Protobuf Include="Protos\envelope.proto" GrpcServices="None" />
   </ItemGroup>
 
 </Project>

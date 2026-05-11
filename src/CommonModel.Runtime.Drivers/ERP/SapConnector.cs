@@ -81,6 +81,7 @@ public sealed class SapConnector : BaseConnector
                         {
                             SourceType = SourceType,
                             DriverId = DriverId,
+                            Context = _options.Context,
                             EntityPath = entitySet,
                             ChangeType = ChangeType.Update,
                             PrimaryKey = new Dictionary<string, object?>(),

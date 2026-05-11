@@ -82,6 +82,7 @@ public sealed class PostgresConnector : BaseConnector
                     {
                         SourceType = SourceType,
                         DriverId = DriverId,
+                        Context = _options.Context,
                         EntityPath = table,
                         ChangeType = ChangeType.Snapshot,
                         PrimaryKey = new Dictionary<string, object?>(),

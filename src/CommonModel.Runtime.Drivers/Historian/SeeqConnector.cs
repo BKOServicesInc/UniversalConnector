@@ -81,6 +81,7 @@ public sealed class SeeqConnector : BaseConnector
                         {
                             SourceType = SourceType,
                             DriverId = DriverId,
+                            Context = _options.Context,
                             EntityPath = signalId,
                             ChangeType = ChangeType.Snapshot,
                             SourceTimestamp = timestamp,

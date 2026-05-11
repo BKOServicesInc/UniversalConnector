@@ -3,6 +3,7 @@ namespace CommonModel.Runtime.Core.Configuration;
 public class ConnectorOptions
 {
     public string DriverId { get; set; } = "";
+    public string Context { get; set; } = "";
     public string SourceType { get; set; } = "";
     public bool Enabled { get; set; } = true;
     public string? Description { get; set; }
@@ -16,6 +17,7 @@ public class NatsOptions
 {
     public string[] Servers { get; set; } = ["nats://localhost:4222"];
     public string SubjectPrefix { get; set; } = "cdc";
-    public bool UseJetStream { get; set; } = false;
+    public bool UseJetStream { get; set; } = true;
+    public string DlqSubjectPrefix { get; set; } = "cdc.dlq";
     public string? CredsFile { get; set; }
 }
