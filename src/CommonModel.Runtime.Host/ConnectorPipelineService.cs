@@ -55,7 +55,7 @@ public sealed class ConnectorPipelineService : BackgroundService
             {
                 try
                 {
-                    await _publisher.PublishAsync(evt, ct: ct);
+                    await _publisher.PublishAsync(evt, subjectOverride: evt.SubjectHint, ct: ct);
 
                     var position = evt.SourceTimestamp?.ToString("O") ?? evt.EventId;
                     await _checkpoints.SaveAsync(new Checkpoint

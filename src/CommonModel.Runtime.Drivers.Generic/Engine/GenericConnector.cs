@@ -5,6 +5,7 @@ using CommonModel.Runtime.Core.Abstractions;
 using CommonModel.Runtime.Core.Descriptors;
 using CommonModel.Runtime.Core.Models;
 using CommonModel.Runtime.Drivers.Generic.Mapping;
+using static CommonModel.Runtime.Drivers.Generic.Mapping.SubjectTemplateResolver;
 
 namespace CommonModel.Runtime.Drivers.Generic.Engine;
 
@@ -70,7 +71,7 @@ public sealed class GenericConnector : BaseConnector
 
             var metadata = BuildMetadata(raw.AdapterMetadata, _descriptor.Nats.AdditionalHeaders);
 
-            yield return new RawChangeEvent
+            var evt = new RawChangeEvent
             {
                 SourceType = _descriptor.SourceType,
                 DriverId = _descriptor.DriverId,
@@ -83,6 +84,13 @@ public sealed class GenericConnector : BaseConnector
                 PreviousFields = prevFields.Count > 0 ? prevFields : null,
                 Metadata = metadata
             };
+
+            var hint = _descriptor.Nats.SubjectOverride
+                ?? (_descriptor.Nats.SubjectTemplate is not null
+                    ? Resolve(_descriptor.Nats.SubjectTemplate, evt)
+                    : null);
+
+            yield return hint is null ? evt : evt with { SubjectHint = hint };
 
             // Update the snapshot with the current fields so the next change to this
             // row has something to diff against. Skip deletes — the row is gone.

@@ -33,6 +33,13 @@ fieldMapping:
     isKey: true
   - source: internal_notes
     exclude: true
+  - source: equipment_type_code
+    target: rdf_type
+    conceptMap:
+      PUMP:  "pid:Pump"
+      VALVE: "pid:Valve"
+      HX:    "pid:HeatExchanger"
+      COMP:  "pid:Compressor"
 
 nats:
   subjectTemplate: "cdc.{context}.assets.{changeType}"

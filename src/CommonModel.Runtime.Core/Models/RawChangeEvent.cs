@@ -25,4 +25,7 @@ public sealed record RawChangeEvent
     public IReadOnlyDictionary<string, object?>? PreviousFields { get; init; }
     public IReadOnlyDictionary<string, string> Metadata { get; init; } = new Dictionary<string, string>();
     public long SequenceNumber { get; init; }
+    // Pre-computed NATS subject set by connectors that support subjectTemplate/subjectOverride.
+    // Null means NatsPublisher derives the subject from Context + EntityPath + ChangeType.
+    public string? SubjectHint { get; init; }
 }

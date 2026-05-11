@@ -100,7 +100,12 @@
           "type":        { "type": "string", "enum": ["string", "int", "long", "double", "bool", "timestamp", "date"] },
           "exclude":     { "type": "boolean", "default": false },
           "isKey":       { "type": "boolean", "default": false },
-          "staticValue": {}
+          "staticValue": {},
+          "conceptMap":  {
+            "type": "object",
+            "description": "Maps source field values to ontology concept IRIs. Key = source value; value = target IRI.",
+            "additionalProperties": { "type": "string" }
+          }
         }
       }
     },

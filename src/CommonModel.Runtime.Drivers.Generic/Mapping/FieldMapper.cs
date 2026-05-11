@@ -41,6 +41,7 @@ public sealed class FieldMapper
 
                 var targetName = rule.Target ?? fieldName;
                 var value = rule.Type is not null ? CastValue(rawValue, rule.Type) : rawValue;
+                value = ApplyConceptMap(rule, value);
 
                 if (rule.IsKey)
                     primaryKey[targetName] = value;
@@ -65,6 +66,7 @@ public sealed class FieldMapper
                 if (rule.Exclude) continue;
                 var targetName = rule.Target ?? fieldName;
                 var value = rule.Type is not null ? CastValue(rawValue, rule.Type) : rawValue;
+                value = ApplyConceptMap(rule, value);
                 if (!rule.IsKey) previousPayload[targetName] = value;
             }
             else
@@ -75,6 +77,13 @@ public sealed class FieldMapper
         }
 
         return (primaryKey, payload, previousPayload);
+    }
+
+    private static object? ApplyConceptMap(FieldMappingRule rule, object? value)
+    {
+        if (rule.ConceptMap is null || value is null) return value;
+        var key = Convert.ToString(value, CultureInfo.InvariantCulture) ?? "";
+        return rule.ConceptMap.TryGetValue(key, out var mapped) ? mapped : value;
     }
 
     private static object? CastValue(object? value, string type)

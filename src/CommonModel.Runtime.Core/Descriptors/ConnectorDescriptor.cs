@@ -162,6 +162,11 @@ public sealed class FieldMappingRule
 
     [YamlMember(Alias = "staticValue")]
     public object? StaticValue { get; set; }
+
+    // Maps source field values to ontology concept IRIs.
+    // Key = source value (as string); value = target IRI or concept identifier.
+    [YamlMember(Alias = "conceptMap")]
+    public Dictionary<string, string>? ConceptMap { get; set; }
 }
 
 public sealed class NatsDescriptorConfig
