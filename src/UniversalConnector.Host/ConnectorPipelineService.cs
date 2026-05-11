@@ -8,18 +8,15 @@ public sealed class ConnectorPipelineService : BackgroundService
 {
     private readonly IConnectorRegistry _registry;
     private readonly INatsPublisher _publisher;
-    private readonly IDataSink _sink;
     private readonly ILogger<ConnectorPipelineService> _logger;
 
     public ConnectorPipelineService(
         IConnectorRegistry registry,
         INatsPublisher publisher,
-        IDataSink sink,
         ILogger<ConnectorPipelineService> logger)
     {
         _registry = registry;
         _publisher = publisher;
-        _sink = sink;
         _logger = logger;
     }
 
@@ -55,7 +52,6 @@ public sealed class ConnectorPipelineService : BackgroundService
                 try
                 {
                     await _publisher.PublishAsync(evt, ct: ct);
-                    await _sink.WriteAsync(evt, ct);
                     _logger.LogDebug("Published {ChangeType} event for {ConnectorId}/{EntityPath}",
                         evt.ChangeType, evt.ConnectorId, evt.EntityPath);
                 }

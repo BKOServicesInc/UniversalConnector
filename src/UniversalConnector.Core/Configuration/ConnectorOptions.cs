@@ -19,9 +19,3 @@ public class NatsOptions
     public bool UseJetStream { get; set; } = false;
     public string? CredsFile { get; set; }
 }
-
-public class PostgresSinkOptions
-{
-    public bool Enabled { get; set; } = true;
-    public string ConnectionString { get; set; } = "";
-}
