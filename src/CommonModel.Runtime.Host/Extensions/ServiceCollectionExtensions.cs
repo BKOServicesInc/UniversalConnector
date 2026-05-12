@@ -25,8 +25,17 @@ public static class ServiceCollectionExtensions
 
         services.AddGenericConnector();
 
+        services.AddSingleton<LifecycleFsm>();
+
         services.AddSingleton<IConnectorRegistry, ConnectorRegistry>();
-        services.AddHostedService<ConnectorPipelineService>();
+        // ConnectorPipelineService doubles as IDriverLifecycleController
+        services.AddSingleton<ConnectorPipelineService>();
+        services.AddSingleton<IDriverLifecycleController>(sp =>
+            sp.GetRequiredService<ConnectorPipelineService>());
+        services.AddHostedService(sp =>
+            sp.GetRequiredService<ConnectorPipelineService>());
+
+        services.AddHostedService<DriverLifecycleService>();
 
         return services;
     }
