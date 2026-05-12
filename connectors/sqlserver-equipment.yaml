@@ -1,4 +1,5 @@
-connectorId: sqlserver-equipment
+driverId: sqlserver-equipment
+context: ctx:equipment
 sourceType: sqlserver
 description: EQUIPMENT database — SQL Server Change Tracking
 enabled: false
@@ -7,7 +8,7 @@ connection:
   host: "commonmodelsql-dev.database.windows.net"
   database: "kge-aveva"
   username: "commonmodelsql-dev"
-  password: "superQ1@!secure"
+  password: "${SQLSERVER_EQUIPMENT_PASSWORD}"
 
 changeDetection:
   mode: cdc

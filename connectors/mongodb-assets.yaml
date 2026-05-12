@@ -1,7 +1,8 @@
-connectorId: mongodb-assets
+driverId: mongodb-assets
+context: ctx:asset-management
 sourceType: mongodb
 description: MongoDB assets database — polling
-enabled: true
+enabled: false
 
 connection:
   uri: "mongodb://${MONGO_HOST}:${MONGO_PORT}"

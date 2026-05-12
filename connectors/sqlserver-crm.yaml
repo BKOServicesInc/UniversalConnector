@@ -1,7 +1,8 @@
-connectorId: sqlserver-crm
+driverId: sqlserver-crm
+context: ctx:crm
 sourceType: sqlserver
 description: CRM database — SQL Server Change Tracking
-enabled: true
+enabled: false
 
 connection:
   host: "${SQLSERVER_HOST}"

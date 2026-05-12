@@ -1,4 +1,5 @@
-connectorId: sharepoint-docs
+driverId: sharepoint-docs
+context: ctx:collaboration
 sourceType: sharepoint
 description: SharePoint document library delta feed
 enabled: false

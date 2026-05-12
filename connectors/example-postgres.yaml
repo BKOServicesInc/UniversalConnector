@@ -1,0 +1,54 @@
+# yaml-language-server: $schema=../../../../docs/connector-schema.json
+# Example: PostgreSQL polling connector for the PID context
+
+driverId: pg-assets-polling
+context: ctx:PID
+sourceType: postgres
+description: Polls the asset registry tables from the plant information database
+
+connection:
+  host: "localhost"
+  port: 5432
+  database: "ordersdb"
+  username: "postgres"
+  password: 12345
+
+changeDetection:
+  mode: polling
+  pollIntervalSeconds: 30
+  watermarkColumn: updated_at
+  lookbackDuration: PT1H
+
+watch:
+  autoDiscover: false
+  entities:
+    - name: public.assets
+      primaryKey: [asset_id]
+    - name: public.asset_attributes
+      primaryKey: [asset_id, attribute_name]
+
+fieldMapping:
+  - source: asset_id
+    target: id
+    isKey: true
+  - source: internal_notes
+    exclude: true
+  - source: equipment_type_code
+    target: rdf_type
+    conceptMap:
+      PUMP:  "pid:Pump"
+      VALVE: "pid:Valve"
+      HX:    "pid:HeatExchanger"
+      COMP:  "pid:Compressor"
+
+nats:
+  subjectTemplate: "cdc.{context}.assets.{changeType}"
+  serializationFormat: json
+  additionalHeaders:
+    x-source-system: plant-information-db
+
+resilience:
+  maxConsecutiveFailures: 5
+  retryDelaySeconds: 10
+  backoffMultiplier: 1.5
+  maxRetryDelaySeconds: 120

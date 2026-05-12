@@ -1,4 +1,5 @@
-connectorId: avevapi-historian
+driverId: avevapi-historian
+context: ctx:process-control
 sourceType: avevapi
 description: AVEVA PI Web API recorded values
 enabled: false

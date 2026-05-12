@@ -1,13 +1,14 @@
-connectorId: pg-aveva
+driverId: pg-aveva
+context: ctx:asset-management
 sourceType: postgres
 description: AVEVA assets database — Postgres polling (Docker port 5433)
-enabled: false
+enabled: true
 
 connection:
   host: "localhost"
   port: 5433
   database: "aveva_db"
-  username: "postgres"
+  username: "connector"
   password: "12345"
 
 changeDetection:
