@@ -17,9 +17,9 @@ public class HealthHeartbeatTests
     {
         controller ??= Substitute.For<IDriverLifecycleController>();
         var heartbeatOpts = Options.Create(opts ?? new HeartbeatOptions());
-        var natsOpts      = Options.Create(new NatsOptions());
+        var factory       = new NatsConnectionFactory(Options.Create(new NatsOptions()));
         return new HealthHeartbeatService(
-            controller, heartbeatOpts, natsOpts,
+            controller, heartbeatOpts, factory,
             NullLogger<HealthHeartbeatService>.Instance);
     }
 

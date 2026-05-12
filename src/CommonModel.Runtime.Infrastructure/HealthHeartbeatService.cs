@@ -6,7 +6,6 @@ using NATS.Client.JetStream;
 using System.Text.Json;
 using CommonModel.Runtime.Core.Abstractions;
 using CommonModel.Runtime.Core.Configuration;
-using CommonModel.Runtime.Core.Models;
 
 namespace CommonModel.Runtime.Infrastructure;
 
@@ -14,7 +13,7 @@ public sealed class HealthHeartbeatService : BackgroundService
 {
     private readonly IDriverLifecycleController _controller;
     private readonly HeartbeatOptions _options;
-    private readonly NatsOptions _natsOptions;
+    private readonly NatsConnectionFactory _factory;
     private readonly ILogger<HealthHeartbeatService> _logger;
 
     private static readonly JsonSerializerOptions JsonOpts = new()
@@ -26,21 +25,18 @@ public sealed class HealthHeartbeatService : BackgroundService
     public HealthHeartbeatService(
         IDriverLifecycleController controller,
         IOptions<HeartbeatOptions> options,
-        IOptions<NatsOptions> natsOptions,
+        NatsConnectionFactory factory,
         ILogger<HealthHeartbeatService> logger)
     {
-        _controller  = controller;
-        _options     = options.Value;
-        _natsOptions = natsOptions.Value;
-        _logger      = logger;
+        _controller = controller;
+        _options    = options.Value;
+        _factory    = factory;
+        _logger     = logger;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        await using var conn = new NatsConnection(NatsOpts.Default with
-        {
-            Url = string.Join(",", _natsOptions.Servers)
-        });
+        await using var conn = new NatsConnection(_factory.BuildOpts());
 
         try
         {

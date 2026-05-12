@@ -1,11 +1,9 @@
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using NATS.Client.Core;
 using NATS.Client.JetStream;
 using System.Text.Json;
 using CommonModel.Runtime.Core.Abstractions;
-using CommonModel.Runtime.Core.Configuration;
 using CommonModel.Runtime.Core.Models;
 
 namespace CommonModel.Runtime.Infrastructure;
@@ -17,27 +15,24 @@ public sealed class DriverLifecycleService : BackgroundService
 
     private readonly IDriverLifecycleController _controller;
     private readonly LifecycleFsm _fsm;
-    private readonly NatsOptions _natsOptions;
+    private readonly NatsConnectionFactory _factory;
     private readonly ILogger<DriverLifecycleService> _logger;
 
     public DriverLifecycleService(
         IDriverLifecycleController controller,
         LifecycleFsm fsm,
-        IOptions<NatsOptions> natsOptions,
+        NatsConnectionFactory factory,
         ILogger<DriverLifecycleService> logger)
     {
-        _controller  = controller;
-        _fsm         = fsm;
-        _natsOptions = natsOptions.Value;
-        _logger      = logger;
+        _controller = controller;
+        _fsm        = fsm;
+        _factory    = factory;
+        _logger     = logger;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        await using var conn = new NatsConnection(NatsOpts.Default with
-        {
-            Url = string.Join(",", _natsOptions.Servers)
-        });
+        await using var conn = new NatsConnection(_factory.BuildOpts());
 
         try
         {

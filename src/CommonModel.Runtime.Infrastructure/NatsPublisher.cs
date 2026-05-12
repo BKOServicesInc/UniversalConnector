@@ -14,6 +14,7 @@ namespace CommonModel.Runtime.Infrastructure;
 public sealed class NatsPublisher : INatsPublisher
 {
     private readonly NatsOptions _options;
+    private readonly NatsConnectionFactory _factory;
     private readonly ILogger<NatsPublisher> _logger;
     private NatsConnection? _connection;
     private NatsJSContext? _js;
@@ -27,9 +28,13 @@ public sealed class NatsPublisher : INatsPublisher
         TimeSpan.FromSeconds(10)
     ];
 
-    public NatsPublisher(IOptions<NatsOptions> options, ILogger<NatsPublisher> logger)
+    public NatsPublisher(
+        IOptions<NatsOptions> options,
+        NatsConnectionFactory factory,
+        ILogger<NatsPublisher> logger)
     {
         _options = options.Value;
+        _factory = factory;
         _logger = logger;
     }
 
@@ -105,12 +110,7 @@ public sealed class NatsPublisher : INatsPublisher
             if (_connection is not null && _js is not null)
                 return (_connection, _js);
 
-            var opts = NatsOpts.Default with
-            {
-                Url = string.Join(",", _options.Servers)
-            };
-
-            var conn = new NatsConnection(opts);
+            var conn = new NatsConnection(_factory.BuildOpts());
             await conn.ConnectAsync();
 
             _logger.LogInformation("NATS connection established to {Servers}",

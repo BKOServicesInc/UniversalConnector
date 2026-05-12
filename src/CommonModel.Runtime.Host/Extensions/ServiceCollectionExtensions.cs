@@ -17,6 +17,9 @@ public static class ServiceCollectionExtensions
         services.Configure<OntologyCacheOptions>(configuration.GetSection("OntologyCache"));
         services.Configure<HeartbeatOptions>(configuration.GetSection("Heartbeat"));
 
+        services.AddSingleton<NatsConnectionFactory>();
+        services.AddHostedService<StartupSelfTestService>();
+
         services.AddSingleton<INatsPublisher, NatsPublisher>();
         services.AddSingleton<ICheckpointStore, NatsCheckpointStore>();
 

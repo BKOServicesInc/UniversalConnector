@@ -5,23 +5,24 @@ using NATS.Client.Core;
 using CommonModel.Runtime.Core.Abstractions;
 using CommonModel.Runtime.Core.Configuration;
 
+
 namespace CommonModel.Runtime.Infrastructure;
 
 public sealed class OntologyCacheRefreshService : BackgroundService
 {
     private readonly IOntologyCache _cache;
-    private readonly NatsOptions _natsOptions;
+    private readonly NatsConnectionFactory _factory;
     private readonly OntologyCacheOptions _cacheOptions;
     private readonly ILogger<OntologyCacheRefreshService> _logger;
 
     public OntologyCacheRefreshService(
         IOntologyCache cache,
-        IOptions<NatsOptions> natsOptions,
+        NatsConnectionFactory factory,
         IOptions<OntologyCacheOptions> cacheOptions,
         ILogger<OntologyCacheRefreshService> logger)
     {
         _cache        = cache;
-        _natsOptions  = natsOptions.Value;
+        _factory      = factory;
         _cacheOptions = cacheOptions.Value;
         _logger       = logger;
     }
@@ -44,10 +45,7 @@ public sealed class OntologyCacheRefreshService : BackgroundService
         if (string.IsNullOrWhiteSpace(subject))
             return;
 
-        await using var conn = new NatsConnection(NatsOpts.Default with
-        {
-            Url = string.Join(",", _natsOptions.Servers)
-        });
+        await using var conn = new NatsConnection(_factory.BuildOpts());
 
         try
         {

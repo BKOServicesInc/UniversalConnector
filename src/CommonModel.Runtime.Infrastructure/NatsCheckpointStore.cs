@@ -13,14 +13,19 @@ namespace CommonModel.Runtime.Infrastructure;
 public sealed class NatsCheckpointStore : ICheckpointStore, IAsyncDisposable
 {
     private readonly NatsOptions _options;
+    private readonly NatsConnectionFactory _factory;
     private readonly ILogger<NatsCheckpointStore> _logger;
     private NatsConnection? _connection;
     private INatsKVStore? _kv;
     private readonly SemaphoreSlim _initLock = new(1, 1);
 
-    public NatsCheckpointStore(IOptions<NatsOptions> options, ILogger<NatsCheckpointStore> logger)
+    public NatsCheckpointStore(
+        IOptions<NatsOptions> options,
+        NatsConnectionFactory factory,
+        ILogger<NatsCheckpointStore> logger)
     {
         _options = options.Value;
+        _factory = factory;
         _logger = logger;
     }
 
@@ -73,8 +78,7 @@ public sealed class NatsCheckpointStore : ICheckpointStore, IAsyncDisposable
         {
             if (_kv is not null) return _kv;
 
-            var opts = NatsOpts.Default with { Url = string.Join(",", _options.Servers) };
-            _connection = new NatsConnection(opts);
+            _connection = new NatsConnection(_factory.BuildOpts());
             await _connection.ConnectAsync();
 
             var js = new NatsJSContext(_connection);
