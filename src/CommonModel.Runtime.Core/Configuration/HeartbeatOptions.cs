@@ -4,7 +4,7 @@ public class HeartbeatOptions
 {
     public int IntervalSeconds { get; set; } = 30;
     public string SubjectPrefix { get; set; } = "cdc.health";
-    // When true, heartbeat messages are published to JetStream (durable).
-    // Falls back to core NATS if no stream captures the subject.
-    public bool UseJetStream { get; set; } = true;
+    // Heartbeats are fire-and-forget signals — core NATS is sufficient.
+    // Set true only if you have a JetStream stream covering the subject prefix.
+    public bool UseJetStream { get; set; } = false;
 }
