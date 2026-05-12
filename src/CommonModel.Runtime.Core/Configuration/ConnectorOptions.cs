@@ -21,4 +21,5 @@ public class NatsOptions
     public string DlqSubjectPrefix { get; set; } = "cdc.dlq";
     public string CheckpointBucket { get; set; } = "cm-checkpoints";
     public string? CredsFile { get; set; }
+    public bool StopOnCriticalFailure { get; set; } = false;
 }

@@ -80,6 +80,16 @@ public class SubjectTemplateResolverTests
     }
 
     [Fact]
+    public void Resolve_UnknownToken_ThrowsArgumentException()
+    {
+        var evt = MakeEvent();
+        var act = () => SubjectTemplateResolver.Resolve("cdc.{unknownToken}.events", evt);
+
+        act.Should().Throw<ArgumentException>()
+            .WithMessage("*unknownToken*");
+    }
+
+    [Fact]
     public void Resolve_ExampleYamlTemplate_ProducesExpectedSubject()
     {
         // Matches the template in example-postgres.yaml

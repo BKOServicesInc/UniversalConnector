@@ -1,3 +1,11 @@
+// Schema evolution rules:
+//   COMPATIBLE (safe):   adding new optional fields with new field numbers,
+//                        adding enum values.
+//   BREAKING (requires coordination): removing or renaming fields,
+//                        changing field types, reusing field numbers.
+// Bump the package minor version (v1 → v2) only on breaking changes;
+// consumers that ignore unknown fields will tolerate compatible additions.
+
 syntax = "proto3";
 
 package commonmodel.runtime.v1;

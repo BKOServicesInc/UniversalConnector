@@ -1,10 +1,8 @@
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using NATS.Client.Core;
 using CommonModel.Runtime.Core.Abstractions;
 using CommonModel.Runtime.Core.Configuration;
-
 
 namespace CommonModel.Runtime.Infrastructure;
 
@@ -45,11 +43,9 @@ public sealed class OntologyCacheRefreshService : BackgroundService
         if (string.IsNullOrWhiteSpace(subject))
             return;
 
-        await using var conn = new NatsConnection(_factory.BuildOpts());
-
         try
         {
-            await conn.ConnectAsync();
+            var conn = await _factory.GetSharedConnectionAsync(stoppingToken);
             _logger.LogInformation("OntologyCacheRefreshService: listening on '{Subject}'", subject);
 
             await foreach (var _ in conn.SubscribeAsync<byte[]>(subject, cancellationToken: stoppingToken))
@@ -65,10 +61,7 @@ public sealed class OntologyCacheRefreshService : BackgroundService
                 }
             }
         }
-        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-        {
-            // normal shutdown
-        }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { }
         catch (Exception ex)
         {
             _logger.LogError(ex, "OntologyCacheRefreshService terminated unexpectedly");

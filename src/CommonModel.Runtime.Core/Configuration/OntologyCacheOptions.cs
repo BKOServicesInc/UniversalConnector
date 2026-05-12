@@ -2,7 +2,7 @@ namespace CommonModel.Runtime.Core.Configuration;
 
 public class OntologyCacheOptions
 {
-    public string EndpointUrl { get; set; } = "";
+    public string? EndpointUrl { get; set; }
     public string? GraphIri { get; set; }
     // NATS subject that triggers a cache reload when a message arrives.
     public string RefreshSubject { get; set; } = "cdc.ontology.refresh";

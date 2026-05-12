@@ -2,7 +2,7 @@ using System.Collections.Concurrent;
 using CommonModel.Runtime.Core.Abstractions;
 using CommonModel.Runtime.Core.Models;
 
-namespace CommonModel.Runtime.Infrastructure;
+namespace CommonModel.Runtime.Tests.TestHelpers;
 
 public sealed class InMemoryOntologyCache : IOntologyCache
 {

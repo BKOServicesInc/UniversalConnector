@@ -51,7 +51,7 @@ public sealed class FusekiOntologyCache : IOntologyCache
 
     public async Task RefreshAsync(CancellationToken ct = default)
     {
-        if (string.IsNullOrWhiteSpace(_options.EndpointUrl))
+        if (_options.EndpointUrl is null or "")
         {
             _logger.LogDebug("OntologyCache: EndpointUrl not configured — skipping Fuseki load");
             _loaded = true;
@@ -86,14 +86,14 @@ public sealed class FusekiOntologyCache : IOntologyCache
 
     private async Task EnsureLoadedAsync(CancellationToken ct)
     {
-        if (!_loaded && _options.LoadOnStartup)
+        if (!_loaded && _options.LoadOnStartup && _options.EndpointUrl is not null)
             await RefreshAsync(ct);
     }
 
     private async Task<IEnumerable<OntologyEntry>> QueryFusekiAsync(CancellationToken ct)
     {
         var sparql = BuildSparqlQuery();
-        var url = $"{_options.EndpointUrl.TrimEnd('/')}/sparql";
+        var url = $"{_options.EndpointUrl!.TrimEnd('/')}/sparql";
 
         using var content = new FormUrlEncodedContent(
             [KeyValuePair.Create("query", sparql)]);

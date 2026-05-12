@@ -2,6 +2,6 @@
 
 public sealed class GenericConnectorOptions
 {
-    public string DescriptorDirectory { get; set; } = "C:\\Repos\\UniversalConnector\\connectors";
-    public bool FailOnDescriptorError { get; set; } = false;
+    public string DescriptorDirectory { get; set; } = "connectors";
+    public bool FailOnDescriptorError { get; set; } = true;
 }

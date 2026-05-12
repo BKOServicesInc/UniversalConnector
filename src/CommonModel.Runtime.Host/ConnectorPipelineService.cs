@@ -9,11 +9,10 @@ namespace CommonModel.Runtime.Host;
 public sealed class ConnectorPipelineService : BackgroundService, IDriverLifecycleController
 {
     private readonly IConnectorRegistry _registry;
-    private readonly INatsPublisher _publisher;
-    private readonly ICheckpointStore _checkpoints;
+    private readonly IEventPipeline _pipeline;
     private readonly ILogger<ConnectorPipelineService> _logger;
 
-    // Populated once in ExecuteAsync; used to restart stopped drivers.
+    // Populated once in ExecuteAsync; stable reference used by restart logic.
     private IReadOnlyList<ISourceDriver> _allDrivers = Array.Empty<ISourceDriver>();
     private CancellationToken _hostToken;
 
@@ -26,14 +25,12 @@ public sealed class ConnectorPipelineService : BackgroundService, IDriverLifecyc
 
     public ConnectorPipelineService(
         IConnectorRegistry registry,
-        INatsPublisher publisher,
-        ICheckpointStore checkpoints,
+        IEventPipeline pipeline,
         ILogger<ConnectorPipelineService> logger)
     {
-        _registry    = registry;
-        _publisher   = publisher;
-        _checkpoints = checkpoints;
-        _logger      = logger;
+        _registry = registry;
+        _pipeline = pipeline;
+        _logger   = logger;
     }
 
     // ── IDriverLifecycleController ────────────────────────────────────────────
@@ -64,7 +61,7 @@ public sealed class ConnectorPipelineService : BackgroundService, IDriverLifecyc
     public Task<bool> StartAsync(string driverId, CancellationToken ct = default)
     {
         if (_infos.TryGetValue(driverId, out var existing) && !existing.Loop.IsCompleted)
-            return Task.FromResult(false); // still running
+            return Task.FromResult(false);
 
         var driver = _allDrivers.FirstOrDefault(d => d.DriverId == driverId);
         if (driver is null) return Task.FromResult(false);
@@ -76,7 +73,7 @@ public sealed class ConnectorPipelineService : BackgroundService, IDriverLifecyc
     public async Task<bool> RestartAsync(string driverId, CancellationToken ct = default)
     {
         await StopAsync(driverId, ct);
-        await Task.Delay(200, ct); // brief pause for cleanup
+        await Task.Delay(200, ct);
         return await StartAsync(driverId, ct);
     }
 
@@ -103,10 +100,30 @@ public sealed class ConnectorPipelineService : BackgroundService, IDriverLifecyc
 
     private async Task LaunchDriverAsync(ISourceDriver driver, CancellationToken parentCt)
     {
-        using var cts = CancellationTokenSource.CreateLinkedTokenSource(parentCt);
-        var task = RunDriverAsync(driver, cts.Token);
-        _infos[driver.DriverId] = new DriverInfo(driver, cts, task);
-        await task;
+        while (!parentCt.IsCancellationRequested)
+        {
+            using var cts  = CancellationTokenSource.CreateLinkedTokenSource(parentCt);
+            var task       = RunDriverAsync(driver, cts.Token);
+            _infos[driver.DriverId] = new DriverInfo(driver, cts, task);
+            await task;
+
+            if (parentCt.IsCancellationRequested) return;
+
+            // Don't restart a driver that explicitly reached Failed state (max failures).
+            if (driver.GetHealth().State == DriverState.Failed)
+            {
+                _logger.LogWarning(
+                    "Driver '{DriverId}' reached Failed state — not restarting", driver.DriverId);
+                return;
+            }
+
+            _logger.LogWarning(
+                "Driver '{DriverId}' exited unexpectedly (state: {State}) — restarting in 5s",
+                driver.DriverId, driver.GetHealth().State);
+
+            try { await Task.Delay(TimeSpan.FromSeconds(5), parentCt); }
+            catch (OperationCanceledException) { return; }
+        }
     }
 
     private async Task RunDriverAsync(ISourceDriver driver, CancellationToken ct)
@@ -122,22 +139,11 @@ public sealed class ConnectorPipelineService : BackgroundService, IDriverLifecyc
             {
                 try
                 {
-                    await _publisher.PublishAsync(evt, subjectOverride: evt.SubjectHint, ct: ct);
-
-                    var position = evt.SourceTimestamp?.ToString("O") ?? evt.EventId;
-                    await _checkpoints.SaveAsync(new Checkpoint
-                    {
-                        DriverId   = evt.DriverId,
-                        EntityPath = evt.EntityPath,
-                        Position   = position
-                    }, ct);
-
-                    _logger.LogDebug("Published {ChangeType} event for {DriverId}/{EntityPath}",
-                        evt.ChangeType, evt.DriverId, evt.EntityPath);
+                    await _pipeline.ProcessAsync(evt, ct);
                 }
                 catch (Exception ex) when (!ct.IsCancellationRequested)
                 {
-                    _logger.LogError(ex, "Failed to publish event {EventId}", evt.EventId);
+                    _logger.LogError(ex, "Pipeline failed for event {EventId}", evt.EventId);
                 }
             }
         }
@@ -151,10 +157,7 @@ public sealed class ConnectorPipelineService : BackgroundService, IDriverLifecyc
         }
         finally
         {
-            try
-            {
-                await driver.DisconnectAsync(CancellationToken.None);
-            }
+            try { await driver.DisconnectAsync(CancellationToken.None); }
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Error during disconnect for '{DriverId}'", driver.DriverId);

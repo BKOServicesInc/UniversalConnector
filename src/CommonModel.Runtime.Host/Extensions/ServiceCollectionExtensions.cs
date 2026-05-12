@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using CommonModel.Runtime.Core.Abstractions;
 using CommonModel.Runtime.Core.Configuration;
@@ -17,11 +17,16 @@ public static class ServiceCollectionExtensions
         services.Configure<OntologyCacheOptions>(configuration.GetSection("OntologyCache"));
         services.Configure<HeartbeatOptions>(configuration.GetSection("Heartbeat"));
 
+        // Factory owns the shared NatsConnection lifetime; IAsyncDisposable ensures cleanup.
         services.AddSingleton<NatsConnectionFactory>();
+        services.AddSingleton<IAsyncDisposable>(sp => sp.GetRequiredService<NatsConnectionFactory>());
         services.AddHostedService<StartupSelfTestService>();
+
+        services.AddHealthChecks().AddCheck<NatsHealthCheck>("nats");
 
         services.AddSingleton<INatsPublisher, NatsPublisher>();
         services.AddSingleton<ICheckpointStore, NatsCheckpointStore>();
+        services.AddSingleton<IEventPipeline, DefaultEventPipeline>();
 
         services.AddHttpClient<FusekiOntologyCache>();
         services.AddSingleton<IOntologyCache, FusekiOntologyCache>();

@@ -1,5 +1,5 @@
 using CommonModel.Runtime.Core.Models;
-using CommonModel.Runtime.Infrastructure;
+using CommonModel.Runtime.Tests.TestHelpers;
 
 namespace CommonModel.Runtime.Tests.Infrastructure;
 

@@ -1,7 +1,6 @@
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using NATS.Client.Core;
 using NATS.Client.JetStream;
 using System.Text.Json;
 using CommonModel.Runtime.Core.Abstractions;
@@ -36,16 +35,17 @@ public sealed class HealthHeartbeatService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        await using var conn = new NatsConnection(_factory.BuildOpts());
-
         try
         {
-            await conn.ConnectAsync();
-            var js = _options.UseJetStream ? new NatsJSContext(conn) : null;
+            var conn = await _factory.GetSharedConnectionAsync(stoppingToken);
+            var js   = _options.UseJetStream ? new NatsJSContext(conn) : null;
 
             _logger.LogInformation(
                 "HealthHeartbeatService: publishing every {Interval}s to '{Prefix}.*'",
                 _options.IntervalSeconds, _options.SubjectPrefix);
+
+            // Publish immediately at startup so operators don't wait one full interval.
+            await PublishAllAsync(conn, js, stoppingToken);
 
             while (!stoppingToken.IsCancellationRequested)
             {
@@ -61,7 +61,7 @@ public sealed class HealthHeartbeatService : BackgroundService
     }
 
     private async Task PublishAllAsync(
-        NatsConnection conn,
+        NATS.Client.Core.NatsConnection conn,
         NatsJSContext? js,
         CancellationToken ct)
     {
@@ -92,7 +92,6 @@ public sealed class HealthHeartbeatService : BackgroundService
             {
                 if (js is not null)
                 {
-                    // JetStream publish failed (stream may not exist) — fall back to core NATS
                     _logger.LogDebug(ex,
                         "JetStream heartbeat failed for '{DriverId}', falling back to core NATS", driverId);
                     try

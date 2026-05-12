@@ -1,7 +1,6 @@
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using NATS.Client.Core;
 using NATS.Client.JetStream;
 using CommonModel.Runtime.Core.Configuration;
 
@@ -11,16 +10,19 @@ public sealed class StartupSelfTestService : IHostedService
 {
     private readonly NatsConnectionFactory _factory;
     private readonly NatsOptions _options;
+    private readonly IHostApplicationLifetime _lifetime;
     private readonly ILogger<StartupSelfTestService> _logger;
 
     public StartupSelfTestService(
         NatsConnectionFactory factory,
         IOptions<NatsOptions> options,
+        IHostApplicationLifetime lifetime,
         ILogger<StartupSelfTestService> logger)
     {
-        _factory = factory;
-        _options = options.Value;
-        _logger  = logger;
+        _factory  = factory;
+        _options  = options.Value;
+        _lifetime = lifetime;
+        _logger   = logger;
     }
 
     public async Task StartAsync(CancellationToken cancellationToken)
@@ -43,6 +45,14 @@ public sealed class StartupSelfTestService : IHostedService
 
         _logger.LogInformation("StartupSelfTestService: {Passed}/{Total} checks passed",
             passed, results.Count);
+
+        if (_options.StopOnCriticalFailure && results.Any(r => !r.passed))
+        {
+            _logger.LogCritical(
+                "StopOnCriticalFailure=true and {Failed} check(s) failed — stopping application",
+                results.Count(r => !r.passed));
+            _lifetime.StopApplication();
+        }
     }
 
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
@@ -60,14 +70,12 @@ public sealed class StartupSelfTestService : IHostedService
         List<(string, bool, string?)> results,
         CancellationToken cancellationToken)
     {
-        await using var conn = new NatsConnection(_factory.BuildOpts());
-
         using var connectCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         connectCts.CancelAfter(TimeSpan.FromSeconds(5));
 
         try
         {
-            await conn.ConnectAsync();
+            var conn = await _factory.GetSharedConnectionAsync(connectCts.Token);
             await conn.PingAsync(connectCts.Token);
             results.Add(("nats-connect", true, null));
         }
@@ -84,7 +92,8 @@ public sealed class StartupSelfTestService : IHostedService
 
         try
         {
-            var js = new NatsJSContext(conn);
+            var conn = await _factory.GetSharedConnectionAsync(jsCts.Token);
+            var js   = new NatsJSContext(conn);
             await js.GetAccountInfoAsync(jsCts.Token);
             results.Add(("jetstream", true, null));
         }

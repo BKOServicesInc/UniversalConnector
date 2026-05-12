@@ -204,6 +204,53 @@ public class DescriptorValidatorTests
         r.Warnings.Should().Contain(w => w.Contains("retryDelaySeconds"));
     }
 
+    // ── Secret field warnings ─────────────────────────────────────────────────
+
+    [Fact]
+    public void Validate_LiteralPassword_EmitsWarning()
+    {
+        var d = Postgres();
+        d.Connection.Password = "s3cr3t";
+        var r = _sut.Validate(d);
+        r.Warnings.Should().Contain(w => w.Contains("password") && w.Contains("${ENV_VAR}"));
+    }
+
+    [Fact]
+    public void Validate_EnvVarPassword_NoWarning()
+    {
+        var d = Postgres();
+        d.Connection.Password = "${DB_PASSWORD}";
+        var r = _sut.Validate(d);
+        r.Warnings.Should().NotContain(w => w.Contains("password"));
+    }
+
+    [Fact]
+    public void Validate_LiteralApiToken_EmitsWarning()
+    {
+        var d = Postgres();
+        d.Connection.ApiToken = "tok-12345";
+        var r = _sut.Validate(d);
+        r.Warnings.Should().Contain(w => w.Contains("apiToken"));
+    }
+
+    [Fact]
+    public void Validate_LiteralClientSecret_EmitsWarning()
+    {
+        var d = Postgres();
+        d.Connection.ClientSecret = "plain-secret";
+        var r = _sut.Validate(d);
+        r.Warnings.Should().Contain(w => w.Contains("clientSecret"));
+    }
+
+    [Fact]
+    public void Validate_NullSecretFields_NoWarning()
+    {
+        var d = Postgres();
+        var r = _sut.Validate(d);
+        r.Warnings.Should().NotContain(w =>
+            w.Contains("password") || w.Contains("apiToken") || w.Contains("clientSecret"));
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private static ConnectorDescriptor Postgres() => new()

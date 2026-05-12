@@ -1,6 +1,5 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using NATS.Client.Core;
 using NATS.Client.JetStream;
 using NATS.Client.KeyValueStore;
 using System.Text.Json;
@@ -10,12 +9,11 @@ using CommonModel.Runtime.Core.Models;
 
 namespace CommonModel.Runtime.Infrastructure;
 
-public sealed class NatsCheckpointStore : ICheckpointStore, IAsyncDisposable
+public sealed class NatsCheckpointStore : ICheckpointStore
 {
     private readonly NatsOptions _options;
     private readonly NatsConnectionFactory _factory;
     private readonly ILogger<NatsCheckpointStore> _logger;
-    private NatsConnection? _connection;
     private INatsKVStore? _kv;
     private readonly SemaphoreSlim _initLock = new(1, 1);
 
@@ -26,19 +24,18 @@ public sealed class NatsCheckpointStore : ICheckpointStore, IAsyncDisposable
     {
         _options = options.Value;
         _factory = factory;
-        _logger = logger;
+        _logger  = logger;
     }
 
     public async Task<Checkpoint?> GetAsync(string driverId, string entityPath, CancellationToken ct = default)
     {
-        var kv = await GetOrCreateKvAsync(ct);
+        var kv  = await GetOrCreateKvAsync(ct);
         var key = BuildKey(driverId, entityPath);
 
         try
         {
             var entry = await kv.GetEntryAsync<byte[]>(key, cancellationToken: ct);
             if (entry.Value is null) return null;
-
             return JsonSerializer.Deserialize<Checkpoint>(entry.Value);
         }
         catch (NatsKVKeyNotFoundException)
@@ -54,8 +51,8 @@ public sealed class NatsCheckpointStore : ICheckpointStore, IAsyncDisposable
 
     public async Task SaveAsync(Checkpoint checkpoint, CancellationToken ct = default)
     {
-        var kv = await GetOrCreateKvAsync(ct);
-        var key = BuildKey(checkpoint.DriverId, checkpoint.EntityPath);
+        var kv    = await GetOrCreateKvAsync(ct);
+        var key   = BuildKey(checkpoint.DriverId, checkpoint.EntityPath);
         var bytes = JsonSerializer.SerializeToUtf8Bytes(checkpoint);
 
         try
@@ -78,10 +75,8 @@ public sealed class NatsCheckpointStore : ICheckpointStore, IAsyncDisposable
         {
             if (_kv is not null) return _kv;
 
-            _connection = new NatsConnection(_factory.BuildOpts());
-            await _connection.ConnectAsync();
-
-            var js = new NatsJSContext(_connection);
+            var conn  = await _factory.GetSharedConnectionAsync(ct);
+            var js    = new NatsJSContext(conn);
             var kvCtx = new NatsKVContext(js);
             _kv = await GetOrCreateBucketAsync(kvCtx, _options.CheckpointBucket, ct);
 
@@ -109,14 +104,7 @@ public sealed class NatsCheckpointStore : ICheckpointStore, IAsyncDisposable
     }
 
     // KV keys must not contain spaces; dots are valid NATS KV key separators.
-    // Colons (e.g. from context names like ctx:PID) are not valid — replace with dash.
+    // Colons (e.g. from context names) are not valid — replace with dash.
     private static string BuildKey(string driverId, string entityPath) =>
         $"{driverId}.{entityPath}".Replace(':', '-').ToLowerInvariant();
-
-    public async ValueTask DisposeAsync()
-    {
-        _initLock.Dispose();
-        if (_connection is not null)
-            await _connection.DisposeAsync();
-    }
 }

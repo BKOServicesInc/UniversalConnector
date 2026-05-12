@@ -1,5 +1,4 @@
 using Microsoft.Extensions.Logging;
-using System.Composition;
 using System.Runtime.CompilerServices;
 using CommonModel.Runtime.Core.Abstractions;
 using CommonModel.Runtime.Core.Descriptors;
@@ -9,7 +8,6 @@ using static CommonModel.Runtime.Drivers.Generic.Mapping.SubjectTemplateResolver
 
 namespace CommonModel.Runtime.Drivers.Generic.Engine;
 
-[Export(typeof(ISourceDriver))]
 public sealed class GenericConnector : BaseConnector
 {
     private readonly ConnectorDescriptor _descriptor;

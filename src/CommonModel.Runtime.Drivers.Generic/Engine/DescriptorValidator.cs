@@ -69,9 +69,25 @@ public sealed class DescriptorValidator
         if (d.Resilience.RetryDelaySeconds < 1)
             warnings.Add("resilience.retryDelaySeconds < 1; using 1s minimum");
 
+        WarnOnLiteralSecrets(d, warnings);
+
         return errors.Count > 0
             ? Core.Descriptors.DescriptorValidationResult.Invalid(errors, warnings)
             : Core.Descriptors.DescriptorValidationResult.Valid(warnings);
+    }
+
+    private static bool LooksLikeLiteralSecret(string? value) =>
+        !string.IsNullOrWhiteSpace(value) && !value.StartsWith("${", StringComparison.Ordinal);
+
+    private static void WarnOnLiteralSecrets(ConnectorDescriptor d, List<string> warnings)
+    {
+        var c = d.Connection;
+        if (LooksLikeLiteralSecret(c.Password))
+            warnings.Add("connection.password appears to be a literal value — use ${ENV_VAR} to reference an environment variable");
+        if (LooksLikeLiteralSecret(c.ApiToken))
+            warnings.Add("connection.apiToken appears to be a literal value — use ${ENV_VAR} to reference an environment variable");
+        if (LooksLikeLiteralSecret(c.ClientSecret))
+            warnings.Add("connection.clientSecret appears to be a literal value — use ${ENV_VAR} to reference an environment variable");
     }
 
     private static void ValidateConnectionFields(ConnectorDescriptor d, List<string> errors)

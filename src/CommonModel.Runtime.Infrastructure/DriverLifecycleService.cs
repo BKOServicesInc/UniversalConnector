@@ -32,7 +32,7 @@ public sealed class DriverLifecycleService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        await using var conn = new NatsConnection(_factory.BuildOpts());
+        var conn = await _factory.GetSharedConnectionAsync(stoppingToken);
 
         try
         {

@@ -1,8 +1,7 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/CommonModel.Runtime.Core/CommonModel.Runtime.Core.csproj" />
-    <Project Path="src/CommonModel.Runtime.Drivers/CommonModel.Runtime.Drivers.csproj" />
-    <Project Path="src/CommonModel.Runtime.Drivers.Generic/CommonModel.Runtime.Drivers.Generic.csproj" />
+<Project Path="src/CommonModel.Runtime.Drivers.Generic/CommonModel.Runtime.Drivers.Generic.csproj" />
     <Project Path="src/CommonModel.Runtime.Host/CommonModel.Runtime.Host.csproj" />
     <Project Path="src/CommonModel.Runtime.Infrastructure/CommonModel.Runtime.Infrastructure.csproj" />
   </Folder>

@@ -4,6 +4,8 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using NATS.Client.Core;
 using NATS.Client.JetStream;
+using System.Diagnostics;
+using System.Diagnostics.Metrics;
 using CommonModel.Runtime.Core.Abstractions;
 using CommonModel.Runtime.Core.Configuration;
 using CommonModel.Runtime.Core.Models;
@@ -11,22 +13,40 @@ using CommonModel.Runtime.Infrastructure.Wire;
 
 namespace CommonModel.Runtime.Infrastructure;
 
-public sealed class NatsPublisher : INatsPublisher
+public sealed class NatsPublisher : INatsPublisher, IAsyncDisposable
 {
     private readonly NatsOptions _options;
     private readonly NatsConnectionFactory _factory;
     private readonly ILogger<NatsPublisher> _logger;
-    private NatsConnection? _connection;
     private NatsJSContext? _js;
     private readonly SemaphoreSlim _initLock = new(1, 1);
 
-    // Retry delays per attempt index: [100 ms, 1 s, 10 s]
+    // Observability
+    private static readonly ActivitySource ActivitySource =
+        new("CommonModel.Runtime.Infrastructure", "1.0");
+    private static readonly Meter Meter =
+        new("CommonModel.Runtime.Infrastructure", "1.0");
+    private static readonly Counter<long> PublishedCounter =
+        Meter.CreateCounter<long>("cm.events.published", description: "Events successfully published to NATS");
+    private static readonly Counter<long> DlqCounter =
+        Meter.CreateCounter<long>("cm.events.dlq", description: "Events routed to the dead-letter queue");
+    private static readonly Counter<long> RetryCounter =
+        Meter.CreateCounter<long>("cm.events.publish_retries", description: "Individual publish retry attempts");
+
+    // Delays between the 3 retry attempts; the 4th attempt (final) has no delay before it.
     private static readonly TimeSpan[] RetryDelays =
     [
         TimeSpan.FromMilliseconds(100),
         TimeSpan.FromSeconds(1),
         TimeSpan.FromSeconds(10)
     ];
+
+    // Simple circuit breaker: after CircuitBreakerThreshold consecutive failures the
+    // circuit opens for CircuitHalfOpenWindow, during which events go straight to DLQ.
+    private const int CircuitBreakerThreshold = 5;
+    private static readonly TimeSpan CircuitHalfOpenWindow = TimeSpan.FromSeconds(30);
+    private int _circuitFailures;
+    private long _circuitOpenedAtTicks = DateTimeOffset.MinValue.UtcTicks;
 
     public NatsPublisher(
         IOptions<NatsOptions> options,
@@ -35,7 +55,7 @@ public sealed class NatsPublisher : INatsPublisher
     {
         _options = options.Value;
         _factory = factory;
-        _logger = logger;
+        _logger  = logger;
     }
 
     public async Task PublishAsync(
@@ -44,102 +64,147 @@ public sealed class NatsPublisher : INatsPublisher
         IReadOnlyDictionary<string, string>? additionalHeaders = null,
         CancellationToken ct = default)
     {
-        var (conn, js) = await GetOrCreateConnectionAsync(ct);
-
+        using var activity = ActivitySource.StartActivity("nats.publish");
         var subject = subjectOverride ?? BuildSubject(evt);
-        var envelope = BuildEnvelope(evt);
-        var bytes = envelope.ToByteArray();
-        var headers = BuildHeaders(evt, additionalHeaders);
+        activity?.SetTag("nats.subject", subject);
+        activity?.SetTag("event.id",     evt.EventId);
+        activity?.SetTag("driver.id",    evt.DriverId);
 
-        Exception? lastEx = null;
-        for (int attempt = 0; attempt < RetryDelays.Length; attempt++)
+        var (conn, js) = await GetOrCreateConnectionAsync(ct);
+        var bytes      = BuildEnvelope(evt).ToByteArray();
+        var headers    = BuildHeaders(evt, additionalHeaders);
+
+        if (CircuitIsOpen)
         {
-            try
-            {
-                var ack = await js.PublishAsync(subject, bytes, headers: headers, cancellationToken: ct);
-                ack.EnsureSuccess();
-
-                _logger.LogDebug("Published {ChangeType} event {EventId} for {DriverId}/{EntityPath} to {Subject}",
-                    evt.ChangeType, evt.EventId, evt.DriverId, evt.EntityPath, subject);
-                return;
-            }
-            catch (Exception ex) when (!ct.IsCancellationRequested)
-            {
-                lastEx = ex;
-                _logger.LogWarning(ex,
-                    "Publish attempt {Attempt}/{Total} failed for event {EventId}; retrying in {Delay}",
-                    attempt + 1, RetryDelays.Length, evt.EventId, RetryDelays[attempt]);
-                await Task.Delay(RetryDelays[attempt], ct);
-            }
+            _logger.LogWarning(
+                "Circuit open — routing event {EventId} directly to DLQ", evt.EventId);
+            activity?.SetTag("circuit", "open");
+            await SendToDlqAsync(conn, subject, bytes, headers, evt.EventId, ct);
+            return;
         }
 
-        // Final attempt — if this also fails, route to DLQ via core NATS
+        // 3 retried attempts, then one final attempt; 4 total.
+        for (int attempt = 1; attempt <= RetryDelays.Length; attempt++)
+        {
+            if (await TryPublishAsync(js, subject, bytes, headers, ct))
+            {
+                RecordSuccess(evt, subject);
+                return;
+            }
+            RetryCounter.Add(1, new TagList { { "driver.id", evt.DriverId } });
+            _logger.LogWarning(
+                "Publish attempt {Attempt}/{Total} failed for event {EventId}; retrying in {Delay}",
+                attempt, RetryDelays.Length + 1, evt.EventId, RetryDelays[attempt - 1]);
+            await Task.Delay(RetryDelays[attempt - 1], ct);
+        }
+
+        // Final (4th) attempt
+        if (await TryPublishAsync(js, subject, bytes, headers, ct))
+        {
+            RecordSuccess(evt, subject);
+            return;
+        }
+
+        // All attempts exhausted — open/advance the circuit and route to DLQ
+        var failures = Interlocked.Increment(ref _circuitFailures);
+        if (failures >= CircuitBreakerThreshold)
+            Interlocked.Exchange(ref _circuitOpenedAtTicks, DateTimeOffset.UtcNow.UtcTicks);
+
+        _logger.LogError(
+            "All 4 publish attempts exhausted for event {EventId}; routing to DLQ", evt.EventId);
+        activity?.SetTag("result", "dlq");
+        await SendToDlqAsync(conn, subject, bytes, headers, evt.EventId, ct);
+    }
+
+    private static async Task<bool> TryPublishAsync(
+        NatsJSContext js,
+        string subject,
+        byte[] bytes,
+        NatsHeaders headers,
+        CancellationToken ct)
+    {
         try
         {
             var ack = await js.PublishAsync(subject, bytes, headers: headers, cancellationToken: ct);
             ack.EnsureSuccess();
-            return;
+            return true;
         }
-        catch (Exception ex)
+        catch (Exception) when (!ct.IsCancellationRequested)
         {
-            _logger.LogError(ex,
-                "All publish attempts exhausted for event {EventId}; routing to DLQ", evt.EventId);
-
-            var dlqSubject = $"{_options.DlqSubjectPrefix}.{evt.DriverId}".ToLowerInvariant();
-            try
-            {
-                await conn.PublishAsync(dlqSubject, bytes, headers: headers, cancellationToken: ct);
-                _logger.LogWarning("Event {EventId} routed to DLQ subject {DlqSubject}", evt.EventId, dlqSubject);
-            }
-            catch (Exception dlqEx)
-            {
-                _logger.LogError(dlqEx,
-                    "DLQ publish also failed for event {EventId} — event lost", evt.EventId);
-            }
+            return false;
         }
     }
 
-    private async ValueTask<(NatsConnection conn, NatsJSContext js)> GetOrCreateConnectionAsync(CancellationToken ct)
+    private async Task SendToDlqAsync(
+        NatsConnection conn,
+        string originalSubject,
+        byte[] bytes,
+        NatsHeaders headers,
+        string eventId,
+        CancellationToken ct)
     {
-        if (_connection is not null && _js is not null)
-            return (_connection, _js);
+        var dlq = $"{_options.DlqSubjectPrefix}.{originalSubject}".ToLowerInvariant();
+        DlqCounter.Add(1);
+        try
+        {
+            await conn.PublishAsync(dlq, bytes, headers: headers, cancellationToken: ct);
+            _logger.LogWarning("Event {EventId} routed to DLQ subject {DlqSubject}", eventId, dlq);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "DLQ publish also failed for event {EventId} — event lost", eventId);
+        }
+    }
+
+    private void RecordSuccess(RawChangeEvent evt, string subject)
+    {
+        Interlocked.Exchange(ref _circuitFailures, 0);
+        PublishedCounter.Add(1, new TagList { { "driver.id", evt.DriverId } });
+        _logger.LogDebug(
+            "Published {ChangeType} event {EventId} for {DriverId}/{EntityPath} to {Subject}",
+            evt.ChangeType, evt.EventId, evt.DriverId, evt.EntityPath, subject);
+    }
+
+    private bool CircuitIsOpen
+    {
+        get
+        {
+            if (_circuitFailures < CircuitBreakerThreshold) return false;
+            var elapsed = DateTimeOffset.UtcNow.UtcTicks -
+                          Interlocked.Read(ref _circuitOpenedAtTicks);
+            return elapsed < CircuitHalfOpenWindow.Ticks;
+        }
+    }
+
+    private async ValueTask<(NatsConnection conn, NatsJSContext js)> GetOrCreateConnectionAsync(
+        CancellationToken ct)
+    {
+        var conn = await _factory.GetSharedConnectionAsync(ct);
+        if (_js is not null) return (conn, _js);
 
         await _initLock.WaitAsync(ct);
         try
         {
-            if (_connection is not null && _js is not null)
-                return (_connection, _js);
-
-            var conn = new NatsConnection(_factory.BuildOpts());
-            await conn.ConnectAsync();
-
-            _logger.LogInformation("NATS connection established to {Servers}",
-                string.Join(", ", _options.Servers));
-
-            _connection = conn;
+            if (_js is not null) return (conn, _js);
             _js = new NatsJSContext(conn);
-            return (_connection, _js);
         }
         finally
         {
             _initLock.Release();
         }
+
+        return (conn, _js);
     }
 
     private string BuildSubject(RawChangeEvent evt)
     {
-        var changeType = evt.ChangeType.ToString().ToLowerInvariant();
-
         if (!string.IsNullOrEmpty(evt.Context))
         {
-            // cdc.{context}.{entityPath}.{changeType}
-            // Normalize context: colons are invalid in NATS subjects
             var context = evt.Context.Replace(':', '-').ToLowerInvariant();
-            return $"{_options.SubjectPrefix}.{context}.{evt.EntityPath}.{changeType}";
+            return $"{_options.SubjectPrefix}.{context}.{evt.EntityPath}.{evt.ChangeType.ToString().ToLowerInvariant()}";
         }
 
-        // Legacy: cdc.{sourceType}.{driverId}.{changeType}
-        return $"{_options.SubjectPrefix}.{evt.SourceType}.{evt.DriverId}.{changeType}"
+        return $"{_options.SubjectPrefix}.{evt.SourceType}.{evt.DriverId}.{evt.ChangeType.ToString().ToLowerInvariant()}"
             .ToLowerInvariant();
     }
 
@@ -147,13 +212,13 @@ public sealed class NatsPublisher : INatsPublisher
     {
         var envelope = new Envelope
         {
-            EventId     = evt.EventId,
-            DetectedAt  = Timestamp.FromDateTimeOffset(evt.DetectedAt),
-            SourceType  = evt.SourceType,
-            DriverId    = evt.DriverId,
-            Context     = evt.Context,
-            EntityPath  = evt.EntityPath,
-            ChangeType  = evt.ChangeType.ToString(),
+            EventId        = evt.EventId,
+            DetectedAt     = Timestamp.FromDateTimeOffset(evt.DetectedAt),
+            SourceType     = evt.SourceType,
+            DriverId       = evt.DriverId,
+            Context        = evt.Context,
+            EntityPath     = evt.EntityPath,
+            ChangeType     = evt.ChangeType.ToString(),
             SequenceNumber = evt.SequenceNumber
         };
 
@@ -182,11 +247,11 @@ public sealed class NatsPublisher : INatsPublisher
     {
         var headers = new NatsHeaders
         {
-            ["eventId"]    = evt.EventId,
-            ["driverId"]   = evt.DriverId,
-            ["context"]    = evt.Context,
-            ["sourceType"] = evt.SourceType,
-            ["changeType"] = evt.ChangeType.ToString(),
+            ["eventId"]      = evt.EventId,
+            ["driverId"]     = evt.DriverId,
+            ["context"]      = evt.Context,
+            ["sourceType"]   = evt.SourceType,
+            ["changeType"]   = evt.ChangeType.ToString(),
             ["content-type"] = "application/x-protobuf"
         };
 
@@ -197,10 +262,9 @@ public sealed class NatsPublisher : INatsPublisher
         return headers;
     }
 
-    public async ValueTask DisposeAsync()
+    public ValueTask DisposeAsync()
     {
         _initLock.Dispose();
-        if (_connection is not null)
-            await _connection.DisposeAsync();
+        return ValueTask.CompletedTask;
     }
 }
