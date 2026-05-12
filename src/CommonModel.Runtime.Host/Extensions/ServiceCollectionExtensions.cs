@@ -14,8 +14,14 @@ public static class ServiceCollectionExtensions
         IConfiguration configuration)
     {
         services.Configure<NatsOptions>(configuration.GetSection("Nats"));
+        services.Configure<OntologyCacheOptions>(configuration.GetSection("OntologyCache"));
+
         services.AddSingleton<INatsPublisher, NatsPublisher>();
         services.AddSingleton<ICheckpointStore, NatsCheckpointStore>();
+
+        services.AddHttpClient<FusekiOntologyCache>();
+        services.AddSingleton<IOntologyCache, FusekiOntologyCache>();
+        services.AddHostedService<OntologyCacheRefreshService>();
 
         services.AddGenericConnector();
 
