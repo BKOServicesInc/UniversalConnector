@@ -1,11 +1,11 @@
 connectorId: mongodb-assets
 sourceType: mongodb
-description: MongoDB assets database via Change Streams CDC
-enabled: false
+description: MongoDB assets database — polling
+enabled: true
 
 connection:
-  uri: "mongodb://localhost:27017"
-  database: "assetsdb"
+  uri: "mongodb://${MONGO_HOST}:${MONGO_PORT}"
+  database: "${MONGO_DB}"
 
 changeDetection:
   mode: polling
@@ -21,7 +21,7 @@ watch:
     - name: locations
       primaryKey: [_id]
 
-fieldMapping: []            # _id is automatically carried as a string
+fieldMapping: []
 
 nats:
   subjectOverride: mongodb-changes

@@ -1,21 +1,47 @@
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+# ── Stage 1: restore (layer-cache friendly) ──────────────────────────────────
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS restore
 WORKDIR /src
 
-COPY UniversalConnector.slnx .
-COPY src/UniversalConnector.Core/UniversalConnector.Core.csproj src/UniversalConnector.Core/
-COPY src/UniversalConnector.Nats/UniversalConnector.Nats.csproj src/UniversalConnector.Nats/
-COPY src/UniversalConnector.Connectors/UniversalConnector.Connectors.csproj src/UniversalConnector.Connectors/
-COPY src/UniversalConnector.Generic/UniversalConnector.Generic.csproj src/UniversalConnector.Generic/
-COPY src/UniversalConnector.Host/UniversalConnector.Host.csproj src/UniversalConnector.Host/
-RUN dotnet restore
+# Copy only .csproj files first so NuGet restore is cached independently of source changes
+COPY src/CommonModel.Runtime.Core/CommonModel.Runtime.Core.csproj                         src/CommonModel.Runtime.Core/
+COPY src/CommonModel.Runtime.Infrastructure/CommonModel.Runtime.Infrastructure.csproj     src/CommonModel.Runtime.Infrastructure/
+COPY src/CommonModel.Runtime.Drivers.Generic/CommonModel.Runtime.Drivers.Generic.csproj   src/CommonModel.Runtime.Drivers.Generic/
+COPY src/CommonModel.Runtime.Host/CommonModel.Runtime.Host.csproj                         src/CommonModel.Runtime.Host/
+
+RUN dotnet restore src/CommonModel.Runtime.Host/CommonModel.Runtime.Host.csproj \
+    --runtime linux-x64
+
+# ── Stage 2: publish ──────────────────────────────────────────────────────────
+FROM restore AS publish
 
 COPY src/ src/
-RUN dotnet publish src/UniversalConnector.Host/UniversalConnector.Host.csproj \
-    -c Release -o /app/publish --no-restore
 
-FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
+RUN dotnet publish src/CommonModel.Runtime.Host/CommonModel.Runtime.Host.csproj \
+    -c Release \
+    -r linux-x64 \
+    --no-restore \
+    --self-contained false \
+    -o /app/publish
+
+# ── Stage 3: runtime ──────────────────────────────────────────────────────────
+FROM mcr.microsoft.com/dotnet/runtime:10.0 AS runtime
+
 WORKDIR /app
-COPY --from=build /app/publish .
+
+# Non-root user for security
+RUN addgroup --system appgroup && adduser --system --ingroup appgroup appuser
+
+# Published binaries
+COPY --from=publish /app/publish .
+
+# Default connector descriptors embedded in the image.
+# Override at runtime with:  -v ./connectors:/app/connectors:ro
 COPY connectors/ connectors/
 
-ENTRYPOINT ["dotnet", "UniversalConnector.Host.dll"]
+# Health check: verify the process is alive (no HTTP server — worker service)
+HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 \
+    CMD pgrep -f CommonModel.Runtime.Host || exit 1
+
+USER appuser
+
+ENTRYPOINT ["dotnet", "CommonModel.Runtime.Host.dll"]

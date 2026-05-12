@@ -4,9 +4,9 @@ description: Knowledge graph — Neo4j Bolt polling
 enabled: true
 
 connection:
-  uri: bolt://localhost:7687
-  username: neo4j
-  password: YourStrongPassword123!
+  uri: "bolt://${NEO4J_HOST}:${NEO4J_PORT}"
+  username: "${NEO4J_USER}"
+  password: "${NEO4J_PASSWORD}"
 
 changeDetection:
   mode: polling

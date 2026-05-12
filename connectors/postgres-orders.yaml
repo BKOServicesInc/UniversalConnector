@@ -4,11 +4,11 @@ description: Orders database — Postgres WAL CDC
 enabled: true
 
 connection:
-  host: "localhost"
-  port: 5432
-  database: "ordersdb"
-  username: "postgres"
-  password: "12345"
+  host: "${POSTGRES_HOST}"
+  port: "${POSTGRES_PORT}"
+  database: "${POSTGRES_DB}"
+  username: "${POSTGRES_USER}"
+  password: "${POSTGRES_PASSWORD}"
 
 changeDetection:
   mode: cdc
@@ -24,8 +24,6 @@ watch:
       primaryKey: [id]
 
 fieldMapping:
-  - source: internal_note
-    exclude: true
   - source: created_at
     type: timestamp
   - source: updated_at

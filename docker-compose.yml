@@ -1,94 +1,267 @@
+# UniversalConnector — full local stack
+#
+# Usage:
+#   cp .env.example .env          # fill in passwords
+#   docker compose up -d          # starts: connector + nats + postgres + sqlserver + neo4j + mongo
+#   docker compose --profile fuseki up -d   # also starts Fuseki ontology server
+#
+# Environment variables are read from the .env file in the same directory.
+
 services:
-  universal-connector:
-    build: .
+
+  # ── Application ──────────────────────────────────────────────────────────────
+  connector:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    image: universal-connector:latest
+    container_name: universal-connector
+    restart: unless-stopped
     environment:
+      DOTNET_ENVIRONMENT: Production
+
       # NATS
       Nats__Servers__0: nats://nats:4222
+      Nats__UseJetStream: "true"
+      Nats__SubjectPrefix: cdc
+      Nats__DlqSubjectPrefix: cdc.dlq
+      Nats__CheckpointBucket: cm-checkpoints
+      Nats__StopOnCriticalFailure: "false"
+      # Nats__CredsFile: /etc/nats/creds/connector.creds  # uncomment if using NATS auth
+
+      # Generic connector
       GenericConnector__DescriptorDirectory: /app/connectors
       GenericConnector__FailOnDescriptorError: "false"
-      # Postgres (set these for postgres-orders.yaml)
+
+      # Heartbeat
+      Heartbeat__IntervalSeconds: "30"
+      Heartbeat__UseJetStream: "true"
+
+      # Ontology (disabled by default; enable by setting a real URL)
+      OntologyCache__EndpointUrl: ""
+      OntologyCache__LoadOnStartup: "false"
+
+      # PostgreSQL — injected into descriptor ${VAR} placeholders
       POSTGRES_HOST: postgres
-      POSTGRES_DB: ordersdb
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: 12345
-      # SQL Server (set these for sqlserver-crm.yaml)
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: ${POSTGRES_DB:-ordersdb}
+      POSTGRES_USER: ${POSTGRES_USER:-connector}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+
+      # SQL Server
       SQLSERVER_HOST: sqlserver
-      SQLSERVER_DB: crmdb
-      SQLSERVER_USER: connector
-      SQLSERVER_PASSWORD: YourStrongPassword123!
-      # Neo4j (set these for neo4j-graph.yaml)
-      NEO4J_URI: bolt://neo4j:7687
-      NEO4J_USER: neo4j
+      SQLSERVER_PORT: "1433"
+      SQLSERVER_DB: ${SQLSERVER_DB:-crmdb}
+      SQLSERVER_USER: ${SQLSERVER_USER:-connector}
+      SQLSERVER_PASSWORD: ${SQLSERVER_PASSWORD}
+
+      # Neo4j
+      NEO4J_HOST: neo4j
+      NEO4J_PORT: "7687"
+      NEO4J_USER: ${NEO4J_USER:-neo4j}
       NEO4J_PASSWORD: ${NEO4J_PASSWORD}
+
+      # MongoDB
+      MONGO_HOST: mongo
+      MONGO_PORT: "27017"
+      MONGO_DB: ${MONGO_DB:-assetsdb}
+
     volumes:
+      # Live-mount descriptors so you can edit without rebuilding
       - ./connectors:/app/connectors:ro
+      # Uncomment to mount NATS credentials:
+      # - ./docker/nats/creds:/etc/nats/creds:ro
     depends_on:
       nats:
         condition: service_healthy
       postgres:
         condition: service_healthy
+      sqlserver:
+        condition: service_healthy
       neo4j:
+        condition: service_healthy
+      mongo:
         condition: service_healthy
     networks:
       - connector-net
-    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
 
+  # ── NATS (JetStream) ──────────────────────────────────────────────────────────
   nats:
-    image: nats:alpine
-    command: ["-js", "-m", "8222"]
+    image: nats:2-alpine
+    container_name: nats
+    restart: unless-stopped
+    command: ["-c", "/etc/nats/nats.conf"]
+    volumes:
+      - ./docker/nats/nats.conf:/etc/nats/nats.conf:ro
+      - nats-data:/data/jetstream
+    ports:
+      - "4222:4222"   # client
+      - "8222:8222"   # monitoring (http://localhost:8222)
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8222/healthz || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 10
-    ports:
-      - "4222:4222"
-      - "8222:8222"
+      start_period: 5s
     networks:
       - connector-net
-    restart: unless-stopped
 
+  # ── PostgreSQL 16 (WAL-level logical for CDC) ─────────────────────────────────
   postgres:
-    image: postgres:16
+    image: postgres:16-alpine
+    container_name: postgres
+    restart: unless-stopped
+    command: >
+      postgres
+        -c wal_level=logical
+        -c max_replication_slots=10
+        -c max_wal_senders=10
     environment:
-      POSTGRES_DB: ordersdb
-      POSTGRES_USER: connector
+      POSTGRES_DB: ${POSTGRES_DB:-ordersdb}
+      POSTGRES_USER: ${POSTGRES_USER:-connector}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - postgres-data:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U connector -d ordersdb"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-connector} -d ${POSTGRES_DB:-ordersdb}"]
       interval: 10s
       timeout: 5s
       retries: 10
-    ports:
-      - "5432:5432"
+      start_period: 10s
     networks:
       - connector-net
-    restart: unless-stopped
 
+  # ── SQL Server 2022 (Change Tracking) ────────────────────────────────────────
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: sqlserver
+    restart: unless-stopped
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: ${SA_PASSWORD}
+      MSSQL_PID: Developer
+    volumes:
+      - sqlserver-data:/var/opt/mssql
+      - ./docker/sqlserver/entrypoint.sh:/entrypoint-init.sh:ro
+      - ./docker/sqlserver/init.sql:/init.sql:ro
+    entrypoint: ["/bin/bash", "/entrypoint-init.sh"]
+    ports:
+      - "1433:1433"
+    healthcheck:
+      test:
+        - "CMD-SHELL"
+        - >
+          /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$$MSSQL_SA_PASSWORD"
+          -No -Q "SELECT 1" > /dev/null 2>&1 || exit 1
+      interval: 15s
+      timeout: 10s
+      retries: 15
+      start_period: 30s
+    networks:
+      - connector-net
+
+  # ── Neo4j 5 ───────────────────────────────────────────────────────────────────
   neo4j:
     image: neo4j:5
+    container_name: neo4j
+    restart: unless-stopped
     environment:
-      NEO4J_AUTH: neo4j/${NEO4J_PASSWORD}
+      NEO4J_AUTH: ${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD}
+      NEO4J_PLUGINS: '["apoc"]'
+      NEO4J_dbms_security_procedures_unrestricted: apoc.*
     volumes:
       - neo4j-data:/data
+      - neo4j-logs:/logs
+    ports:
+      - "7474:7474"   # browser UI
+      - "7687:7687"   # Bolt
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:7474 || exit 1"]
       interval: 15s
       timeout: 10s
       retries: 10
-    ports:
-      - "7474:7474"
-      - "7687:7687"
+      start_period: 30s
     networks:
       - connector-net
-    restart: unless-stopped
 
+  # ── MongoDB 7 ─────────────────────────────────────────────────────────────────
+  mongo:
+    image: mongo:7
+    container_name: mongo
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_DATABASE: ${MONGO_DB:-assetsdb}
+    volumes:
+      - mongo-data:/data/db
+      - ./docker/mongo/init.js:/docker-entrypoint-initdb.d/init.js:ro
+    ports:
+      - "27017:27017"
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping').ok", "--quiet"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    networks:
+      - connector-net
+
+  # ── Fuseki (optional — start with: docker compose --profile fuseki up) ────────
+  fuseki:
+    image: stain/jena-fuseki:latest
+    container_name: fuseki
+    profiles: [fuseki]
+    restart: unless-stopped
+    environment:
+      ADMIN_PASSWORD: ${FUSEKI_ADMIN_PASSWORD:-admin}
+      JVM_ARGS: -Xmx1g
+    volumes:
+      - fuseki-data:/fuseki
+    ports:
+      - "3030:3030"   # UI: http://localhost:3030
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3030/$/ping || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks:
+      - connector-net
+
+  # ── NATS monitoring UI (optional) ─────────────────────────────────────────────
+  nats-surveyor:
+    image: natsio/nats-surveyor:latest
+    container_name: nats-surveyor
+    profiles: [monitoring]
+    restart: unless-stopped
+    command: ["-s", "nats://nats:4222", "--http-listen", "0.0.0.0:7777"]
+    ports:
+      - "7777:7777"
+    depends_on:
+      nats:
+        condition: service_healthy
+    networks:
+      - connector-net
+
+# ── Networks ──────────────────────────────────────────────────────────────────
 networks:
   connector-net:
     driver: bridge
 
+# ── Volumes ───────────────────────────────────────────────────────────────────
 volumes:
+  nats-data:
   postgres-data:
+  sqlserver-data:
   neo4j-data:
+  neo4j-logs:
+  mongo-data:
+  fuseki-data:

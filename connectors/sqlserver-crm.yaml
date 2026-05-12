@@ -4,10 +4,11 @@ description: CRM database — SQL Server Change Tracking
 enabled: true
 
 connection:
-  host: "(localdb)\\MSSQLLocalDB"
-  database: "crmdb"
-  username: "connector"
-  password: "YourStrongPassword123!"
+  host: "${SQLSERVER_HOST}"
+  port: "${SQLSERVER_PORT}"
+  database: "${SQLSERVER_DB}"
+  username: "${SQLSERVER_USER}"
+  password: "${SQLSERVER_PASSWORD}"
 
 changeDetection:
   mode: cdc
@@ -23,8 +24,6 @@ watch:
       primaryKey: [ContactId]
 
 fieldMapping:
-  - source: SSN
-    exclude: true
   - source: ModifiedDate
     type: timestamp
     target: updatedAt
