@@ -15,6 +15,7 @@ public static class ServiceCollectionExtensions
     {
         services.Configure<NatsOptions>(configuration.GetSection("Nats"));
         services.Configure<OntologyCacheOptions>(configuration.GetSection("OntologyCache"));
+        services.Configure<HeartbeatOptions>(configuration.GetSection("Heartbeat"));
 
         services.AddSingleton<INatsPublisher, NatsPublisher>();
         services.AddSingleton<ICheckpointStore, NatsCheckpointStore>();
@@ -36,6 +37,7 @@ public static class ServiceCollectionExtensions
             sp.GetRequiredService<ConnectorPipelineService>());
 
         services.AddHostedService<DriverLifecycleService>();
+        services.AddHostedService<HealthHeartbeatService>();
 
         return services;
     }

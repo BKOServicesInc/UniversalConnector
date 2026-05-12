@@ -2,6 +2,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using NATS.Client.Core;
+using NATS.Client.JetStream;
 using System.Text.Json;
 using CommonModel.Runtime.Core.Abstractions;
 using CommonModel.Runtime.Core.Configuration;
@@ -41,11 +42,12 @@ public sealed class DriverLifecycleService : BackgroundService
         try
         {
             await conn.ConnectAsync();
+            var js = new NatsJSContext(conn);
             _logger.LogInformation("DriverLifecycleService: listening on '{Subject}'", CommandSubject);
 
             await foreach (var msg in conn.SubscribeAsync<byte[]>(CommandSubject, cancellationToken: stoppingToken))
             {
-                await HandleCommandAsync(conn, msg, stoppingToken);
+                await HandleCommandAsync(conn, js, msg, stoppingToken);
             }
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { }
@@ -57,6 +59,7 @@ public sealed class DriverLifecycleService : BackgroundService
 
     private async Task HandleCommandAsync(
         NatsConnection conn,
+        NatsJSContext js,
         NatsMsg<byte[]> msg,
         CancellationToken ct)
     {
@@ -139,12 +142,22 @@ public sealed class DriverLifecycleService : BackgroundService
             CommandId       = cmd.CommandId
         };
 
-        var evtBytes = JsonSerializer.SerializeToUtf8Bytes(evt, JsonOpts.Default);
+        var evtBytes   = JsonSerializer.SerializeToUtf8Bytes(evt, JsonOpts.Default);
         var evtSubject = $"{LifecyclePrefix}.{cmd.DriverId}".ToLowerInvariant();
 
         try
         {
-            await conn.PublishAsync(evtSubject, evtBytes, cancellationToken: ct);
+            // Prefer JetStream for durable lifecycle events; fall back to core NATS if no stream exists.
+            try
+            {
+                var ack = await js.PublishAsync(evtSubject, evtBytes, cancellationToken: ct);
+                ack.EnsureSuccess();
+            }
+            catch
+            {
+                await conn.PublishAsync(evtSubject, evtBytes, cancellationToken: ct);
+            }
+
             _logger.LogInformation(
                 "Driver '{DriverId}' transitioned {From} → {To} (command: {Action})",
                 cmd.DriverId, currentState, newState, action);
