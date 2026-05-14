@@ -1,0 +1,35 @@
+driverId: neo4j-graph
+context: ctx:knowledge-graph
+sourceType: neo4j
+description: Knowledge graph — Neo4j Bolt polling
+enabled: true
+
+connection:
+  uri: bolt://localhost:7687
+  username: neo4j
+  password: YourStrongPassword123!
+
+changeDetection:
+  mode: polling
+  pollIntervalSeconds: 5
+  watermarkColumn: updatedAt
+  lookbackDuration: PT2H
+
+watch:
+  autoDiscover: false
+  entities:
+    - name: Asset
+      primaryKey: [assetId]
+    - name: Location
+      primaryKey: [locationId]
+    - name: REL:LOCATED_AT
+      primaryKey: [id]
+
+nats:
+  subjectOverride: graph-changes
+  additionalHeaders:
+    domain: asset-management
+
+resilience:
+  maxConsecutiveFailures: 3
+  retryDelaySeconds: 20

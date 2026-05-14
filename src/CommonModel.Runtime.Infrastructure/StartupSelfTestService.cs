@@ -2,6 +2,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using NATS.Client.JetStream;
+using NATS.Client.JetStream.Models;
 using CommonModel.Runtime.Core.Configuration;
 
 namespace CommonModel.Runtime.Infrastructure;
@@ -90,16 +91,62 @@ public sealed class StartupSelfTestService : IHostedService
         using var jsCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         jsCts.CancelAfter(TimeSpan.FromSeconds(5));
 
+        NatsJSContext? js = null;
         try
         {
             var conn = await _factory.GetSharedConnectionAsync(jsCts.Token);
-            var js   = new NatsJSContext(conn);
+            js = new NatsJSContext(conn);
             await js.GetAccountInfoAsync(jsCts.Token);
             results.Add(("jetstream", true, null));
         }
         catch (Exception ex)
         {
             results.Add(("jetstream", false, ex.Message));
+            return;
+        }
+
+        await EnsureStreamsAsync(js, cancellationToken);
+    }
+
+    private async Task EnsureStreamsAsync(NatsJSContext js, CancellationToken ct)
+    {
+        // One stream covers all cdc.> subjects: events, lifecycle, commands.
+        // Idempotent — skipped if the stream already exists.
+        const string streamName = "CDC";
+        const string subjectFilter = "cdc.>";
+
+        try
+        {
+            await js.GetStreamAsync(streamName, cancellationToken: ct);
+            _logger.LogInformation("JetStream stream '{Stream}' already exists", streamName);
+        }
+        catch (NatsJSApiException ex) when (ex.Error.Code == 404)
+        {
+            try
+            {
+                await js.CreateStreamAsync(new StreamConfig
+                {
+                    Name        = streamName,
+                    Subjects    = [subjectFilter],
+                    Storage     = StreamConfigStorage.File,
+                    Retention   = StreamConfigRetention.Limits,
+                    MaxAge      = TimeSpan.FromDays(1),
+                    NumReplicas = 1,
+                }, ct);
+                _logger.LogInformation(
+                    "JetStream stream '{Stream}' created (subjects: {Subjects})",
+                    streamName, subjectFilter);
+            }
+            catch (Exception createEx)
+            {
+                _logger.LogWarning(createEx,
+                    "Could not create JetStream stream '{Stream}' — events will use core NATS",
+                    streamName);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not check JetStream stream '{Stream}'", streamName);
         }
     }
 }

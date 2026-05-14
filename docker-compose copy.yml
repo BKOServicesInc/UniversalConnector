@@ -10,86 +10,86 @@
 services:
 
   # ── Application ──────────────────────────────────────────────────────────────
-  # connector:
-  #   build:
-  #     context: .
-  #     dockerfile: Dockerfile
-  #     target: runtime
-  #   image: universal-connector:latest
-  #   container_name: universal-connector
-  #   restart: unless-stopped
-  #   environment:
-  #     DOTNET_ENVIRONMENT: Production
+  connector:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    image: universal-connector:latest
+    container_name: universal-connector
+    restart: unless-stopped
+    environment:
+      DOTNET_ENVIRONMENT: Production
 
-  #     # NATS
-  #     Nats__Servers__0: nats://nats:4222
-  #     Nats__UseJetStream: "true"
-  #     Nats__SubjectPrefix: cdc
-  #     Nats__DlqSubjectPrefix: cdc.dlq
-  #     Nats__CheckpointBucket: cm-checkpoints
-  #     Nats__StopOnCriticalFailure: "false"
-  #     # Nats__CredsFile: /etc/nats/creds/connector.creds  # uncomment if using NATS auth
+      # NATS
+      Nats__Servers__0: nats://nats:4222
+      Nats__UseJetStream: "true"
+      Nats__SubjectPrefix: cdc
+      Nats__DlqSubjectPrefix: cdc.dlq
+      Nats__CheckpointBucket: cm-checkpoints
+      Nats__StopOnCriticalFailure: "false"
+      # Nats__CredsFile: /etc/nats/creds/connector.creds  # uncomment if using NATS auth
 
-  #     # Generic connector
-  #     GenericConnector__DescriptorDirectory: /app/connectors
-  #     GenericConnector__FailOnDescriptorError: "false"
+      # Generic connector
+      GenericConnector__DescriptorDirectory: /app/connectors
+      GenericConnector__FailOnDescriptorError: "false"
 
-  #     # Heartbeat
-  #     Heartbeat__IntervalSeconds: "30"
-  #     Heartbeat__UseJetStream: "true"
+      # Heartbeat
+      Heartbeat__IntervalSeconds: "30"
+      Heartbeat__UseJetStream: "true"
 
-  #     # Ontology (disabled by default; enable by setting a real URL)
-  #     OntologyCache__EndpointUrl: ""
-  #     OntologyCache__LoadOnStartup: "false"
+      # Ontology (disabled by default; enable by setting a real URL)
+      OntologyCache__EndpointUrl: ""
+      OntologyCache__LoadOnStartup: "false"
 
-  #     # PostgreSQL — injected into descriptor ${VAR} placeholders
-  #     POSTGRES_HOST: postgres
-  #     POSTGRES_PORT: "5432"
-  #     POSTGRES_DB: ordersdb
-  #     POSTGRES_USER: connector}
-  #     POSTGRES_PASSWORD: 12345
+      # PostgreSQL — injected into descriptor ${VAR} placeholders
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: ${POSTGRES_DB:-ordersdb}
+      POSTGRES_USER: ${POSTGRES_USER:-connector}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
 
-  #     # # SQL Server
-  #     SQLSERVER_HOST: sqlserver
-  #     SQLSERVER_PORT: "1433"
-  #     SQLSERVER_DB: crmdb
-  #     SQLSERVER_USER: connector
-  #     SQLSERVER_PASSWORD: YourStrongPassword123!
+      # # SQL Server
+      SQLSERVER_HOST: sqlserver
+      SQLSERVER_PORT: "1433"
+      SQLSERVER_DB: ${SQLSERVER_DB:-crmdb}
+      SQLSERVER_USER: ${SQLSERVER_USER:-connector}
+      SQLSERVER_PASSWORD: ${SQLSERVER_PASSWORD}
 
-  #     # Neo4j
-  #     NEO4J_HOST: neo4j
-  #     NEO4J_PORT: "7687"
-  #     NEO4J_USER: neo4j
-  #     NEO4J_PASSWORD: ${NEO4J_PASSWORD}
+      # Neo4j
+      NEO4J_HOST: neo4j
+      NEO4J_PORT: "7687"
+      NEO4J_USER: ${NEO4J_USER:-neo4j}
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD}
 
-  #     # MongoDB
-  #     # MONGO_HOST: mongo
-  #     # MONGO_PORT: "27017"
-  #     # MONGO_DB: ${MONGO_DB:-assetsdb}
+      # MongoDB
+      # MONGO_HOST: mongo
+      # MONGO_PORT: "27017"
+      # MONGO_DB: ${MONGO_DB:-assetsdb}
 
-  #   volumes:
-  #     # Live-mount descriptors so you can edit without rebuilding
-  #     - ./connectors:/app/connectors:ro
-  #     # Uncomment to mount NATS credentials:
-  #     # - ./docker/nats/creds:/etc/nats/creds:ro
-  #   depends_on:
-  #     nats:
-  #       condition: service_healthy
-  #     # postgres:
-  #     #   condition: service_healthy
-  #     # sqlserver:
-  #     #   condition: service_healthy
-  #     neo4j:
-  #       condition: service_healthy
-  #     # mongo:
-  #     #   condition: service_healthy
-  #   networks:
-  #     - connector-net
-  #   logging:
-  #     driver: json-file
-  #     options:
-  #       max-size: "20m"
-  #       max-file: "5"
+    volumes:
+      # Live-mount descriptors so you can edit without rebuilding
+      - ./connectors:/app/connectors:ro
+      # Uncomment to mount NATS credentials:
+      # - ./docker/nats/creds:/etc/nats/creds:ro
+    depends_on:
+      nats:
+        condition: service_healthy
+      # postgres:
+      #   condition: service_healthy
+      # sqlserver:
+      #   condition: service_healthy
+      neo4j:
+        condition: service_healthy
+      # mongo:
+      #   condition: service_healthy
+    networks:
+      - connector-net
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
 
   # ── NATS (JetStream) ──────────────────────────────────────────────────────────
   nats:
@@ -113,32 +113,32 @@ services:
       - connector-net
 
   # ── PostgreSQL 16 (WAL-level logical for CDC) ─────────────────────────────────
-  postgres:
-    image: postgres:16-alpine
-    container_name: postgres
-    restart: unless-stopped
-    command: >
-      postgres
-        -c wal_level=logical
-        -c max_replication_slots=10
-        -c max_wal_senders=10
-    environment:
-      POSTGRES_DB: aveva_db
-      POSTGRES_USER: connector
-      POSTGRES_PASSWORD: 12345
-    volumes:
-      - postgres-data:/var/lib/postgresql/data
-      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
-    ports:
-      - "5433:5432"
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U connector -d aveva_db"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 10s
-    networks:
-      - connector-net
+  # postgres:
+  #   image: postgres:16-alpine
+  #   container_name: postgres
+  #   restart: unless-stopped
+  #   command: >
+  #     postgres
+  #       -c wal_level=logical
+  #       -c max_replication_slots=10
+  #       -c max_wal_senders=10
+  #   environment:
+  #     POSTGRES_DB: ${POSTGRES_DB:-ordersdb}
+  #     POSTGRES_USER: ${POSTGRES_USER:-connector}
+  #     POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+  #   volumes:
+  #     - postgres-data:/var/lib/postgresql/data
+  #     - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+  #   ports:
+  #     - "5432:5432"
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-connector} -d ${POSTGRES_DB:-ordersdb}"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 10
+  #     start_period: 10s
+  #   networks:
+  #     - connector-net
 
   # ── SQL Server 2022 (Change Tracking) ────────────────────────────────────────
   # sqlserver:
@@ -175,7 +175,7 @@ services:
     container_name: neo4j
     restart: unless-stopped
     environment:
-      NEO4J_AUTH: neo4j/YourStrongPassword123!
+      NEO4J_AUTH: ${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD}
       NEO4J_PLUGINS: '["apoc"]'
       NEO4J_dbms_security_procedures_unrestricted: apoc.*
     volumes:
@@ -259,7 +259,7 @@ networks:
 # ── Volumes ───────────────────────────────────────────────────────────────────
 volumes:
   nats-data:
-  postgres-data:
+  # postgres-data:
   # sqlserver-data:
   neo4j-data:
   neo4j-logs:

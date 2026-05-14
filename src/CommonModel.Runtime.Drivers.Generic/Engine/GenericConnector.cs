@@ -69,13 +69,20 @@ public sealed class GenericConnector : BaseConnector
 
             var metadata = BuildMetadata(raw.AdapterMetadata, _descriptor.Nats.AdditionalHeaders);
 
+            // Polling adapters (Neo4j, watermark-based SQL) always emit ChangeType.Snapshot
+            // because they query by watermark and cannot distinguish Insert from Update.
+            // The snapshot cache tells us: if the key was seen before → Update, otherwise → Insert.
+            var resolvedChangeType = raw.ChangeType == ChangeType.Snapshot
+                ? (_snapshots.ContainsKey(snapshotKey) ? ChangeType.Update : ChangeType.Insert)
+                : raw.ChangeType;
+
             var evt = new RawChangeEvent
             {
                 SourceType = _descriptor.SourceType,
                 DriverId = _descriptor.DriverId,
                 Context = _descriptor.Context,
                 EntityPath = raw.EntityPath,
-                ChangeType = raw.ChangeType,
+                ChangeType = resolvedChangeType,
                 SourceTimestamp = raw.SourceTimestamp,
                 PrimaryKey = primaryKey,
                 Fields = fields,

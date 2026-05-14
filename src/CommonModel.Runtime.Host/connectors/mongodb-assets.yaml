@@ -1,0 +1,36 @@
+driverId: mongodb-assets
+context: ctx:asset-management
+sourceType: mongodb
+description: MongoDB assets database — polling
+enabled: true
+
+connection:
+  uri: "mongodb://localhost:27017"
+  database: "assetsdb"
+
+changeDetection:
+  mode: polling
+  pollIntervalSeconds: 30
+  watermarkColumn: updatedAt
+  lookbackDuration: PT1H
+
+watch:
+  autoDiscover: false
+  entities:
+    - name: assets
+      primaryKey: [_id]
+    - name: locations
+      primaryKey: [_id]
+
+fieldMapping: []
+
+nats:
+  subjectOverride: mongodb-changes
+  additionalHeaders:
+    domain: asset-management
+
+resilience:
+  maxConsecutiveFailures: 5
+  retryDelaySeconds: 10
+  backoffMultiplier: 1.5
+  maxRetryDelaySeconds: 120

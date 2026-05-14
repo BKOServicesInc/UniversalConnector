@@ -64,9 +64,14 @@ public sealed class SqlServerAdapter : BaseProtocolAdapter
                 await using var conn = new SqlConnection(_connectionString);
                 await conn.OpenAsync(ct);
 
-                var joinOn = string.Join(" AND ", entity.PrimaryKey.Select(pk => $"t.[{pk}] = ct.[{pk}]"));
+                var joinOn  = string.Join(" AND ", entity.PrimaryKey.Select(pk => $"t.[{pk}] = ct.[{pk}]"));
+                // Always select the PK columns from the ct (CHANGETABLE) side so that
+                // DELETE events still carry the primary key — the LEFT JOIN to the table
+                // returns NULL for all t.* columns once the row has been removed.
+                var ctPkCols = string.Join(", ", entity.PrimaryKey.Select(pk => $"ct.[{pk}]"));
                 var sql = $@"
                     SELECT ct.SYS_CHANGE_VERSION, ct.SYS_CHANGE_OPERATION, ct.SYS_CHANGE_COLUMNS,
+                           {ctPkCols},
                            t.*
                     FROM CHANGETABLE(CHANGES {entity.Name}, @from) AS ct
                     LEFT JOIN {entity.Name} t ON {joinOn}
@@ -79,12 +84,20 @@ public sealed class SqlServerAdapter : BaseProtocolAdapter
                 long maxVersion = fromVersion;
                 while (await reader.ReadAsync(ct))
                 {
-                    var version = reader.GetInt64(0);
+                    var version   = reader.GetInt64(0);
                     var operation = reader.GetString(1);
                     if (version > maxVersion) maxVersion = version;
 
+                    // Columns 3..3+pkCount-1 = PK values from ct (always present, even on DELETE)
+                    var pkCount  = entity.PrimaryKey.Count;
+                    var pkValues = new Dictionary<string, object?>(pkCount);
+                    for (int i = 0; i < pkCount; i++)
+                        pkValues[entity.PrimaryKey[i]] = reader.IsDBNull(3 + i) ? null : reader.GetValue(3 + i);
+
+                    // Columns 3+pkCount onwards = t.* (NULL on DELETE because row is gone)
                     var fields = new Dictionary<string, object?>();
-                    for (int i = 3; i < reader.FieldCount; i++)
+                    int tStart = 3 + pkCount;
+                    for (int i = tStart; i < reader.FieldCount; i++)
                         fields[reader.GetName(i)] = reader.IsDBNull(i) ? null : reader.GetValue(i);
 
                     var changeType = operation switch
@@ -94,6 +107,14 @@ public sealed class SqlServerAdapter : BaseProtocolAdapter
                         "D" => ChangeType.Delete,
                         _   => ChangeType.Snapshot
                     };
+
+                    // For DELETE the table row is gone — keep only the PK so the event
+                    // carries a meaningful identity rather than a bag of empty strings.
+                    if (changeType == ChangeType.Delete)
+                        fields = pkValues;
+                    else
+                        foreach (var (k, v) in pkValues)
+                            fields[k] = v;   // ensure ct PK values take precedence over t.*
 
                     yield return new RawChangeRecord
                     {

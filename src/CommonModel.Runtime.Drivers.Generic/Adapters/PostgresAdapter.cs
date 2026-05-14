@@ -114,6 +114,21 @@ public sealed class PostgresAdapter : BaseProtocolAdapter
                     PreviousFields = oldFields
                 };
             }
+            else if (msg is IndexUpdateMessage idxUpd)
+            {
+                // REPLICA IDENTITY = INDEX or DEFAULT — old row contains only the
+                // identifying columns (typically the PK). Better than nothing.
+                var oldFields = await ReadFields(idxUpd.Relation, idxUpd.Key, ct);
+                var newFields = await ReadFields(idxUpd.Relation, idxUpd.NewRow, ct);
+                record = new RawChangeRecord
+                {
+                    EntityPath      = $"{idxUpd.Relation.Namespace}.{idxUpd.Relation.RelationName}",
+                    ChangeType      = ChangeType.Update,
+                    SourceTimestamp = idxUpd.ServerClock,
+                    Fields          = newFields,
+                    PreviousFields  = oldFields
+                };
+            }
             else if (msg is UpdateMessage upd)
             {
                 var fields = await ReadFields(upd.Relation, upd.NewRow, ct);
@@ -245,6 +260,28 @@ public sealed class PostgresAdapter : BaseProtocolAdapter
             createSlot.Parameters.AddWithValue("slot", slot);
             await createSlot.ExecuteNonQueryAsync(ct);
             _logger.LogInformation("Created replication slot '{Slot}'", slot);
+        }
+
+        // Ensure REPLICA IDENTITY FULL on every watched table so pgoutput emits the
+        // OLD row on UPDATE/DELETE. Without this, PreviousFields would be empty.
+        // Idempotent — Postgres no-ops when the setting already matches.
+        foreach (var entity in descriptor.Watch.Entities)
+        {
+            try
+            {
+                await using var alterCmd = new NpgsqlCommand(
+                    $"ALTER TABLE {entity.Name} REPLICA IDENTITY FULL", conn);
+                await alterCmd.ExecuteNonQueryAsync(ct);
+                _logger.LogInformation(
+                    "Ensured REPLICA IDENTITY FULL on '{Entity}' (required to emit previous values)",
+                    entity.Name);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex,
+                    "Could not set REPLICA IDENTITY FULL on '{Entity}' — previous values will be empty on UPDATE/DELETE",
+                    entity.Name);
+            }
         }
     }
 

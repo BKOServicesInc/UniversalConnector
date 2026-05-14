@@ -1,0 +1,47 @@
+driverId: pg-aveva
+context: ctx:asset-management
+sourceType: postgres
+description: AVEVA assets database — Postgres polling (Docker port 5433)
+enabled: true
+
+connection:
+  host: "localhost"
+  port: 5433
+  database: "aveva_db"
+  username: "connector"
+  password: "12345"
+
+changeDetection:
+  mode: polling
+  pollIntervalSeconds: 30
+  watermarkColumn: updated_at
+  lookbackDuration: PT1H
+
+watch:
+  autoDiscover: false
+  entities:
+    - name: public.assets
+      primaryKey: [asset_id]
+    - name: public.locations
+      primaryKey: [location_id]
+
+fieldMapping:
+  - source: created_at
+    type: timestamp
+  - source: updated_at
+    type: timestamp
+  - source: install_date
+    type: timestamp
+  - source: last_maintenance_date
+    type: timestamp
+
+nats:
+  subjectOverride: aveva-changes
+  additionalHeaders:
+    domain: asset-management
+
+resilience:
+  maxConsecutiveFailures: 5
+  retryDelaySeconds: 10
+  backoffMultiplier: 1.5
+  maxRetryDelaySeconds: 120

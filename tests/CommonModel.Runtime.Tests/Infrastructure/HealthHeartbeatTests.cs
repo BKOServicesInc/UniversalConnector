@@ -141,8 +141,10 @@ public class HealthHeartbeatTests
     }
 
     [Fact]
-    public void HeartbeatOptions_DefaultUseJetStream_IsTrue()
+    public void HeartbeatOptions_DefaultUseJetStream_IsFalse()
     {
-        new HeartbeatOptions().UseJetStream.Should().BeTrue();
+        // Heartbeats are fire-and-forget — core NATS by default so no stream
+        // needs to be provisioned to receive them.
+        new HeartbeatOptions().UseJetStream.Should().BeFalse();
     }
 }

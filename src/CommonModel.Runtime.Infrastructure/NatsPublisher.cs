@@ -41,6 +41,9 @@ public sealed class NatsPublisher : INatsPublisher, IAsyncDisposable
         TimeSpan.FromSeconds(10)
     ];
 
+    private static readonly JsonFormatter EnvelopeJsonFormatter =
+        new(JsonFormatter.Settings.Default.WithIndentation("  "));
+
     // Simple circuit breaker: after CircuitBreakerThreshold consecutive failures the
     // circuit opens for CircuitHalfOpenWindow, during which events go straight to DLQ.
     private const int CircuitBreakerThreshold = 5;
@@ -71,8 +74,12 @@ public sealed class NatsPublisher : INatsPublisher, IAsyncDisposable
         activity?.SetTag("driver.id",    evt.DriverId);
 
         var (conn, js) = await GetOrCreateConnectionAsync(ct);
-        var bytes      = BuildEnvelope(evt).ToByteArray();
+        var envelope   = BuildEnvelope(evt);
+        var bytes      = envelope.ToByteArray();
         var headers    = BuildHeaders(evt, additionalHeaders);
+
+        if (_logger.IsEnabled(LogLevel.Debug))
+            _logger.LogDebug("NATS payload (JSON):\n{Json}", EnvelopeJsonFormatter.Format(envelope));
 
         if (CircuitIsOpen)
         {
@@ -80,6 +87,14 @@ public sealed class NatsPublisher : INatsPublisher, IAsyncDisposable
                 "Circuit open — routing event {EventId} directly to DLQ", evt.EventId);
             activity?.SetTag("circuit", "open");
             await SendToDlqAsync(conn, subject, bytes, headers, evt.EventId, ct);
+            return;
+        }
+
+        // Core NATS path (no JetStream stream required)
+        if (!_options.UseJetStream)
+        {
+            await conn.PublishAsync(subject, bytes, headers: headers, cancellationToken: ct);
+            RecordSuccess(evt, subject);
             return;
         }
 
@@ -160,9 +175,19 @@ public sealed class NatsPublisher : INatsPublisher, IAsyncDisposable
     {
         Interlocked.Exchange(ref _circuitFailures, 0);
         PublishedCounter.Add(1, new TagList { { "driver.id", evt.DriverId } });
-        _logger.LogDebug(
-            "Published {ChangeType} event {EventId} for {DriverId}/{EntityPath} to {Subject}",
-            evt.ChangeType, evt.EventId, evt.DriverId, evt.EntityPath, subject);
+
+        _logger.LogInformation(
+            "NATS ► {Subject}  [{ChangeType}]  driver={DriverId}  entity={EntityPath}  id={EventId}",
+            subject, evt.ChangeType, evt.DriverId, evt.EntityPath, evt.EventId);
+
+        if (_logger.IsEnabled(LogLevel.Debug))
+        {
+            var pk     = string.Join(", ", evt.PrimaryKey.Select(k => $"{k.Key}={k.Value}"));
+            var fields = string.Join(", ", evt.Fields.Select(k => $"{k.Key}={k.Value}"));
+            _logger.LogDebug(
+                "         pk=({PrimaryKey})  fields=({Fields})",
+                pk, fields);
+        }
     }
 
     private bool CircuitIsOpen
