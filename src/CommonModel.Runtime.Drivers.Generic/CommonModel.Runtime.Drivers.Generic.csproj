@@ -17,6 +17,26 @@
     <PackageReference Include="YamlDotNet" Version="17.1.0" />
   </ItemGroup>
 
+  <!--
+    AVEVA PI AF SDK reference. The official OSIsoft.AFSDK ships with PI AF Client
+    and is installed under %PIHOME%\AF\PublicAssemblies\4.0. There is no public
+    NuGet feed for it, so we reference the on-disk assembly. Override with the
+    AfSdkPath property at build time if your install lives elsewhere:
+
+        dotnet build /p:AfSdkPath=C:\custom\path\OSIsoft.AFSDK.dll
+  -->
+  <PropertyGroup>
+    <PIHOME Condition="'$(PIHOME)' == ''">$(ProgramFiles)\PIPC</PIHOME>
+    <AfSdkPath Condition="'$(AfSdkPath)' == ''">$(PIHOME)\AF\PublicAssemblies\4.0\OSIsoft.AFSDK.dll</AfSdkPath>
+  </PropertyGroup>
+
+  <ItemGroup Condition="Exists('$(AfSdkPath)')">
+    <Reference Include="OSIsoft.AFSDK">
+      <HintPath>$(AfSdkPath)</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
