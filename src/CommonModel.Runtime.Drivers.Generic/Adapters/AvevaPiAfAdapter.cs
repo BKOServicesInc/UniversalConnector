@@ -12,8 +12,11 @@
 using Microsoft.Extensions.Logging;
 using OSIsoft.AF;
 using OSIsoft.AF.Asset;
+using System.IO;
 using System.Runtime.CompilerServices;
+using System.Text;
 using System.Xml;
+using System.Xml.Serialization;
 using CommonModel.Runtime.Core.Abstractions;
 using CommonModel.Runtime.Core.Descriptors;
 using CommonModel.Runtime.Core.Models;
@@ -26,24 +29,32 @@ public sealed class AvevaPiAfAdapter : BaseProtocolAdapter, IWritableProtocolAda
     public const string EntityTypeTemplate = "elementTemplate";
     public const string EntityTypeElement  = "element";
     public const string ReplicaSessionHeader = "replicaSession";
+    private const string CookieEntityPath = "afcookie";
 
     private readonly ILogger<AvevaPiAfAdapter> _logger;
+    private readonly ICheckpointStore _checkpoints;
 
     // One PISystem connection is shared across all descriptors that target the
     // same AF server. The adapter is a singleton, so we cache by AF system name.
     private readonly Dictionary<string, PISystem> _systems = new(StringComparer.OrdinalIgnoreCase);
 
     // AF Server-side change cookies — per driver. AFDatabase.FindChangedItems
-    // returns a cookie that resumes the next call from where this one left off,
-    // so we never miss or duplicate a change across polls or restarts (within
-    // the AF server's change-buffer retention).
+    // returns a cookie that resumes the next call from where this one left off.
+    // On first open per driver, we either restore the cookie from the checkpoint
+    // store (survives restarts) or anchor it to "now" via GetFindChangedItemsCookie
+    // — never start from null, which would replay the entire AF change-buffer
+    // history on every cold start.
     private readonly Dictionary<string, object?> _changeCookies = new();
 
     // Tracks replica-session IDs we have applied via the reverse path so that the
     // forward poll can drop the resulting echo CDC event (loop prevention L1).
     private readonly HashSet<string> _selfWriteSessions = new(StringComparer.OrdinalIgnoreCase);
 
-    public AvevaPiAfAdapter(ILogger<AvevaPiAfAdapter> logger) => _logger = logger;
+    public AvevaPiAfAdapter(ILogger<AvevaPiAfAdapter> logger, ICheckpointStore checkpoints)
+    {
+        _logger      = logger;
+        _checkpoints = checkpoints;
+    }
 
     public override string SourceType => SourceTypeName;
 
@@ -52,29 +63,66 @@ public sealed class AvevaPiAfAdapter : BaseProtocolAdapter, IWritableProtocolAda
 
     // ─── Open / close ────────────────────────────────────────────────────────
 
-    protected override Task OpenCoreAsync(ConnectorDescriptor descriptor, CancellationToken ct)
+    protected override async Task OpenCoreAsync(ConnectorDescriptor descriptor, CancellationToken ct)
     {
         var systemName = ResolveSystemName(descriptor);
-        if (_systems.ContainsKey(systemName))
-            return Task.CompletedTask;
+        if (!_systems.TryGetValue(systemName, out var system))
+        {
+            var systems = new PISystems();
+            system = systems[systemName]
+                ?? throw new InvalidOperationException(
+                    $"PI AF system '{systemName}' is not registered on this host. " +
+                    $"Add it in PI System Explorer or via `afdiag /pisystem:{systemName}`.");
 
-        var systems = new PISystems();
-        var system = systems[systemName]
-            ?? throw new InvalidOperationException(
-                $"PI AF system '{systemName}' is not registered on this host. " +
-                $"Add it in PI System Explorer or via `afdiag /pisystem:{systemName}`.");
+            var c = descriptor.Connection;
+            if (!string.IsNullOrWhiteSpace(c.Username))
+                system.Connect(new System.Net.NetworkCredential(c.Username, c.Password ?? ""));
+            else
+                system.Connect();
 
-        var c = descriptor.Connection;
-        if (!string.IsNullOrWhiteSpace(c.Username))
-            system.Connect(new System.Net.NetworkCredential(c.Username, c.Password ?? ""));
-        else
-            system.Connect();
+            _systems[systemName] = system;
+            _logger.LogInformation(
+                "Connected to PI AF system '{System}' (server: {Server}, version: {Version})",
+                systemName, system.Name, system.ServerVersion);
+        }
 
-        _systems[systemName] = system;
+        await EnsureCookieAsync(descriptor.DriverId, system, ct);
+    }
+
+    // Per-driver cookie initialization — runs once per driver lifetime. Order
+    // of preference:
+    //   1. Already in-memory (we've been polling this run) → no-op.
+    //   2. Restore from checkpoint store (KV bucket cm-checkpoints) → resume
+    //      exactly where we left off across restarts.
+    //   3. Anchor with PISystem.GetFindChangedItemsCookie(searchSandbox:false)
+    //      → "start from now", ignoring everything already in the AF change
+    //      buffer at startup. Matches the legacy 4.8 connector behavior and
+    //      prevents the days-of-history ghost replay on first run.
+    private async Task EnsureCookieAsync(string driverId, PISystem system, CancellationToken ct)
+    {
+        if (_changeCookies.ContainsKey(driverId)) return;
+
+        var checkpoint = await _checkpoints.GetAsync(driverId, CookieEntityPath, ct);
+        if (checkpoint is not null && TryDeserializeCookie(checkpoint.Position, out var restored))
+        {
+            _changeCookies[driverId] = restored;
+            _logger.LogInformation(
+                "Restored PI AF change-cookie for driver '{Driver}' from checkpoint (updated {When:o})",
+                driverId, checkpoint.UpdatedAt);
+            return;
+        }
+
+        // No persisted cookie — anchor to "now" so we don't replay historical
+        // commits that pre-date the connector.
+        var anchor = system.GetFindChangedItemsCookie(searchSandbox: false);
+        _changeCookies[driverId] = anchor;
         _logger.LogInformation(
-            "Connected to PI AF system '{System}' (server: {Server}, version: {Version})",
-            systemName, system.Name, system.ServerVersion);
-        return Task.CompletedTask;
+            "Anchored PI AF change-cookie for driver '{Driver}' to current server state — " +
+            "pre-existing changes in the AF buffer will be ignored.", driverId);
+
+        // Persist the anchor immediately so a crash before the first delta save
+        // still leaves us with a valid resume point.
+        await TrySaveCookieAsync(driverId, anchor, ct);
     }
 
     protected override Task CloseCoreAsync(CancellationToken ct)
@@ -110,6 +158,8 @@ public sealed class AvevaPiAfAdapter : BaseProtocolAdapter, IWritableProtocolAda
                 yield return rec;
             }
 
+            await TrySaveCookieAsync(descriptor.DriverId, _changeCookies[descriptor.DriverId], ct);
+
             try { await Task.Delay(interval, ct); }
             catch (OperationCanceledException) { yield break; }
         }
@@ -118,6 +168,9 @@ public sealed class AvevaPiAfAdapter : BaseProtocolAdapter, IWritableProtocolAda
     // AFDatabase.FindChangedItems is the official server-side delta API: it
     // returns only items changed since the previous cookie. We drain in pages
     // until the server reports no more changes for this round.
+    //
+    // searchSandbox: false → committed server-side changes only. Setting this
+    // to true would surface the calling SDK session's own pending check-outs.
     private IEnumerable<RawChangeRecord> DrainChanges(
         AFDatabase db, string driverId, HashSet<string> watchTypes)
     {
@@ -127,7 +180,7 @@ public sealed class AvevaPiAfAdapter : BaseProtocolAdapter, IWritableProtocolAda
         const int pageSize = 500;
         while (true)
         {
-            var changes = db.FindChangedItems(true, pageSize, cookie, out var nextCookie);
+            var changes = db.FindChangedItems(false, pageSize, cookie, out var nextCookie);
             cookie = nextCookie;
             if (changes is null || changes.Count == 0) break;
 
@@ -141,6 +194,85 @@ public sealed class AvevaPiAfAdapter : BaseProtocolAdapter, IWritableProtocolAda
         }
 
         _changeCookies[key] = cookie;
+    }
+
+    // ─── Cookie persistence ─────────────────────────────────────────────────
+    //
+    // The AF SDK returns the cookie as an opaque `object` (concrete type varies
+    // by AF SDK version — typically string or a small DTO). We serialize via
+    // XmlSerializer (the same approach the legacy 4.8 connector used), prefix
+    // with the AssemblyQualifiedName so the loader can recover the type, and
+    // store the result as a base64 string in Checkpoint.Position.
+    //
+    // All operations are best-effort: a serialization failure logs a warning
+    // and falls back to in-memory cookie only. The connector keeps polling.
+
+    private async Task TrySaveCookieAsync(string driverId, object? cookie, CancellationToken ct)
+    {
+        if (cookie is null) return;
+        var serialized = SerializeCookie(cookie);
+        if (serialized is null) return;
+
+        try
+        {
+            await _checkpoints.SaveAsync(new Checkpoint
+            {
+                DriverId   = driverId,
+                EntityPath = CookieEntityPath,
+                Position   = serialized
+            }, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "Failed to persist PI AF change-cookie for driver '{Driver}' — " +
+                "next restart will re-anchor to current server state.", driverId);
+        }
+    }
+
+    private string? SerializeCookie(object cookie)
+    {
+        try
+        {
+            var type = cookie.GetType();
+            var ser  = new XmlSerializer(type);
+            using var sw = new StringWriter();
+            ser.Serialize(sw, cookie);
+            var bytes = Encoding.UTF8.GetBytes(sw.ToString());
+            return $"{type.AssemblyQualifiedName}|{Convert.ToBase64String(bytes)}";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "PI AF change-cookie is not XML-serializable ({Type}) — checkpoint persistence disabled.",
+                cookie.GetType().FullName);
+            return null;
+        }
+    }
+
+    private bool TryDeserializeCookie(string? position, out object? cookie)
+    {
+        cookie = null;
+        if (string.IsNullOrWhiteSpace(position)) return false;
+        var sep = position.IndexOf('|');
+        if (sep <= 0) return false;
+
+        try
+        {
+            var type = Type.GetType(position[..sep]);
+            if (type is null) return false;
+            var xml = Encoding.UTF8.GetString(Convert.FromBase64String(position[(sep + 1)..]));
+            var ser = new XmlSerializer(type);
+            using var sr = new StringReader(xml);
+            cookie = ser.Deserialize(sr);
+            return cookie is not null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "Failed to deserialize persisted PI AF change-cookie — will re-anchor to current state.");
+            return false;
+        }
     }
 
     private static RawChangeRecord? ToRecord(AFDatabase db, AFChangeInfo info, HashSet<string> watchTypes)
