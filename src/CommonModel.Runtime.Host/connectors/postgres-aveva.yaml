@@ -2,7 +2,7 @@ driverId: pg-aveva
 context: ctx:asset-management
 sourceType: postgres
 description: AVEVA assets database — Postgres polling (Docker port 5433)
-enabled: true
+enabled: false
 
 connection:
   host: "localhost"

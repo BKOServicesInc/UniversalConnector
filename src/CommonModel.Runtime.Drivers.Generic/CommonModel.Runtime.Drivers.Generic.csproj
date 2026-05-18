@@ -15,26 +15,15 @@
     <PackageReference Include="System.Composition" Version="8.0.0" />
     <PackageReference Include="System.Data.Odbc" Version="10.0.7" />
     <PackageReference Include="YamlDotNet" Version="17.1.0" />
-  </ItemGroup>
 
-  <!--
-    AVEVA PI AF SDK reference. The official OSIsoft.AFSDK ships with PI AF Client
-    and is installed under %PIHOME%\AF\PublicAssemblies\4.0. There is no public
-    NuGet feed for it, so we reference the on-disk assembly. Override with the
-    AfSdkPath property at build time if your install lives elsewhere:
-
-        dotnet build /p:AfSdkPath=C:\custom\path\OSIsoft.AFSDK.dll
-  -->
-  <PropertyGroup>
-    <PIHOME Condition="'$(PIHOME)' == ''">$(ProgramFiles)\PIPC</PIHOME>
-    <AfSdkPath Condition="'$(AfSdkPath)' == ''">$(PIHOME)\AF\PublicAssemblies\4.0\OSIsoft.AFSDK.dll</AfSdkPath>
-  </PropertyGroup>
-
-  <ItemGroup Condition="Exists('$(AfSdkPath)')">
-    <Reference Include="OSIsoft.AFSDK">
-      <HintPath>$(AfSdkPath)</HintPath>
-      <Private>false</Private>
-    </Reference>
+    <!--
+      AVEVA PI AF SDK — the official NuGet package targets net8.0 and bundles
+      every Aveva/OSIsoft DLL the SDK needs (PI.IdentityModel, PI.Net, PI
+      Configuration, analysis rules, data-reference plug-ins, …). On .NET 10
+      these get copied into the host's bin folder automatically, so no on-disk
+      probe / GAC fallback is required.
+    -->
+    <PackageReference Include="Aveva.AFSDK" Version="3.2.0.52" />
   </ItemGroup>
 
   <PropertyGroup>
