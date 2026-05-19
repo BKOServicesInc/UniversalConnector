@@ -86,20 +86,27 @@ public sealed class AvevaPiAfAdapter : BaseProtocolAdapter, IWritableProtocolAda
                 systemName, system.Name, system.ServerVersion);
         }
 
-        await EnsureCookieAsync(descriptor.DriverId, system, ct);
+        await EnsureCookieAsync(descriptor, ct);
     }
 
-    // Per-driver cookie initialization — runs once per driver lifetime. Order
-    // of preference:
-    //   1. Already in-memory (we've been polling this run) → no-op.
+    // Per-driver cookie initialization — runs once per driver lifetime.
+    //
+    // CRITICAL: The cookie used with AFDatabase.FindChangedItems is a *database*
+    // cookie, NOT the system cookie returned by PISystem.GetFindChangedItemsCookie.
+    // Passing a system cookie to AFDatabase.FindChangedItems will silently produce
+    // wrong results (no further changes detected after the first poll).
+    //
+    // Anchor order:
+    //   1. Already in-memory → no-op.
     //   2. Restore from checkpoint store (KV bucket cm-checkpoints) → resume
     //      exactly where we left off across restarts.
-    //   3. Anchor with PISystem.GetFindChangedItemsCookie(searchSandbox:false)
-    //      → "start from now", ignoring everything already in the AF change
-    //      buffer at startup. Matches the legacy 4.8 connector behavior and
-    //      prevents the days-of-history ghost replay on first run.
-    private async Task EnsureCookieAsync(string driverId, PISystem system, CancellationToken ct)
+    //   3. Anchor by calling FindChangedItems(false, int.MaxValue, null, out cookie)
+    //      and DISCARDING the returned items — this is the AVEVA-documented way
+    //      to get a database cookie that means "everything from now forward".
+    //      Drain in a loop to make sure we are truly at the buffer tail.
+    private async Task EnsureCookieAsync(ConnectorDescriptor descriptor, CancellationToken ct)
     {
+        var driverId = descriptor.DriverId;
         if (_changeCookies.ContainsKey(driverId)) return;
 
         var checkpoint = await _checkpoints.GetAsync(driverId, CookieEntityPath, ct);
@@ -112,16 +119,26 @@ public sealed class AvevaPiAfAdapter : BaseProtocolAdapter, IWritableProtocolAda
             return;
         }
 
-        // No persisted cookie — anchor to "now" so we don't replay historical
-        // commits that pre-date the connector.
-        var anchor = system.GetFindChangedItemsCookie(searchSandbox: false);
+        // No persisted cookie — drain the database's change buffer to anchor at
+        // its current tail. The returned changes are intentionally discarded so
+        // pre-existing commits don't replay through the pipeline.
+        var db = ResolveDatabase(descriptor);
+        object? anchor = null;
+        int discarded = 0;
+        while (true)
+        {
+            var results = db.FindChangedItems(false, 1000, anchor, out var next);
+            anchor = next;
+            if (results is null || results.Count == 0) break;
+            discarded += results.Count;
+        }
+
         _changeCookies[driverId] = anchor;
         _logger.LogInformation(
-            "Anchored PI AF change-cookie for driver '{Driver}' to current server state — " +
-            "pre-existing changes in the AF buffer will be ignored.", driverId);
+            "Anchored PI AF change-cookie for driver '{Driver}' to current database tail " +
+            "(discarded {Discarded} pre-existing change record(s) from the AF buffer).",
+            driverId, discarded);
 
-        // Persist the anchor immediately so a crash before the first delta save
-        // still leaves us with a valid resume point.
         await TrySaveCookieAsync(driverId, anchor, ct);
     }
 
@@ -178,22 +195,49 @@ public sealed class AvevaPiAfAdapter : BaseProtocolAdapter, IWritableProtocolAda
         _changeCookies.TryGetValue(key, out var cookie);
 
         const int pageSize = 500;
+        int totalFromAf = 0;
+        int totalEmitted = 0;
+        var emittedPaths = new List<string>();
+        var skippedReasons = new List<string>();
+
         while (true)
         {
             var changes = db.FindChangedItems(false, pageSize, cookie, out var nextCookie);
             cookie = nextCookie;
             if (changes is null || changes.Count == 0) break;
+            totalFromAf += changes.Count;
 
             foreach (var ci in changes)
             {
                 var rec = ToRecord(db, ci, watchTypes);
-                if (rec is not null) yield return rec;
+                if (rec is null)
+                {
+                    skippedReasons.Add($"{ci.Identity}/{ci.Action}/{ci.ID}");
+                    continue;
+                }
+                _logger.LogDebug(
+                    "PI AF yielding {ChangeType} for {EntityPath} (driver={Driver})",
+                    rec.ChangeType, rec.EntityPath, driverId);
+                yield return rec;
+                totalEmitted++;
+                emittedPaths.Add(rec.EntityPath);
             }
 
             if (changes.Count < pageSize) break;
         }
 
         _changeCookies[key] = cookie;
+
+        if (totalFromAf > 0)
+            _logger.LogDebug(
+                "PI AF poll for '{Driver}': AF returned {AfCount} change(s), emitted {Emitted} " +
+                "[{Paths}]; skipped {Skipped} [{SkipReasons}].",
+                driverId, totalFromAf, totalEmitted,
+                string.Join(", ", emittedPaths),
+                totalFromAf - totalEmitted,
+                string.Join(", ", skippedReasons));
+        else
+            _logger.LogDebug("PI AF poll for '{Driver}': no changes.", driverId);
     }
 
     // ─── Cookie persistence ─────────────────────────────────────────────────
@@ -294,7 +338,10 @@ public sealed class AvevaPiAfAdapter : BaseProtocolAdapter, IWritableProtocolAda
             {
                 if (changeType == ChangeType.Delete)
                     return DeletedRecord(EntityTypeElement, info, ts);
-                var el = db.Elements[info.ID];
+                // info.FindObject(piSystem, autoLoad: true) forces a server-side fetch
+                // so newly-added objects (not yet in the local AFDatabase collection
+                // cache) resolve correctly. db.Elements[info.ID] would miss them.
+                var el = info.FindObject(db.PISystem, autoLoad: true) as AFElement;
                 if (el is null) return null;
                 return new RawChangeRecord
                 {
@@ -313,7 +360,7 @@ public sealed class AvevaPiAfAdapter : BaseProtocolAdapter, IWritableProtocolAda
             {
                 if (changeType == ChangeType.Delete)
                     return DeletedRecord(EntityTypeTemplate, info, ts);
-                var t = db.ElementTemplates[info.ID];
+                var t = info.FindObject(db.PISystem, autoLoad: true) as AFElementTemplate;
                 if (t is null) return null;
                 return new RawChangeRecord
                 {

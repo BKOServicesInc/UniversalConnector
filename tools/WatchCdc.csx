@@ -9,6 +9,7 @@
 #r "nuget: Google.Protobuf, 3.28.0"
 #r "../src/CommonModel.Runtime.Infrastructure/bin/Debug/net10.0/CommonModel.Runtime.Infrastructure.dll"
 
+using Google.Protobuf;
 using NATS.Client.Core;
 using CommonModel.Runtime.Infrastructure.Wire;
 

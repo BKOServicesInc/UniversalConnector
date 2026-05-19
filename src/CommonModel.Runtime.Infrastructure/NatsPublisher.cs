@@ -6,6 +6,7 @@ using NATS.Client.Core;
 using NATS.Client.JetStream;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
+using System.Text;
 using CommonModel.Runtime.Core.Abstractions;
 using CommonModel.Runtime.Core.Configuration;
 using CommonModel.Runtime.Core.Models;
@@ -225,12 +226,34 @@ public sealed class NatsPublisher : INatsPublisher, IAsyncDisposable
     {
         if (!string.IsNullOrEmpty(evt.Context))
         {
-            var context = evt.Context.Replace(':', '-').ToLowerInvariant();
-            return $"{_options.SubjectPrefix}.{context}.{evt.EntityPath}.{evt.ChangeType.ToString().ToLowerInvariant()}";
+            var context    = evt.Context.Replace(':', '-').ToLowerInvariant();
+            var entityPath = SanitizeSubjectSegment(evt.EntityPath);
+            return $"{_options.SubjectPrefix}.{context}.{entityPath}.{evt.ChangeType.ToString().ToLowerInvariant()}";
         }
 
         return $"{_options.SubjectPrefix}.{evt.SourceType}.{evt.DriverId}.{evt.ChangeType.ToString().ToLowerInvariant()}"
             .ToLowerInvariant();
+    }
+
+    // NATS subjects only accept [A-Za-z0-9_.-] with '.' as token separator.
+    // PI AF entity paths like "elementTemplate/BKO Templat by Veda" or
+    // "element/\\Aveva-Pi\BKO_LULU_DB\BKO Test1" contain '/', '\\', and spaces
+    // — all illegal. We normalize path separators to '.' (preserving hierarchy
+    // so consumers can wildcard-subscribe per level) and replace everything
+    // else illegal with '_'.
+    private static string SanitizeSubjectSegment(string raw)
+    {
+        if (string.IsNullOrEmpty(raw)) return raw;
+        var sb = new StringBuilder(raw.Length);
+        foreach (var c in raw)
+        {
+            if (c == '/' || c == '\\') sb.Append('.');
+            else if (c == '.' || c == '-' || c == '_' || char.IsLetterOrDigit(c)) sb.Append(c);
+            else sb.Append('_');
+        }
+        var s = sb.ToString();
+        while (s.Contains("..")) s = s.Replace("..", ".");
+        return s.Trim('.');
     }
 
     private static Envelope BuildEnvelope(RawChangeEvent evt)
