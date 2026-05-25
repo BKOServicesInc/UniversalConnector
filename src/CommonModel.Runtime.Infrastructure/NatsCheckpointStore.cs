@@ -103,8 +103,22 @@ public sealed class NatsCheckpointStore : ICheckpointStore
         }
     }
 
-    // KV keys must not contain spaces; dots are valid NATS KV key separators.
-    // Colons (e.g. from context names) are not valid — replace with dash.
-    private static string BuildKey(string driverId, string entityPath) =>
-        $"{driverId}.{entityPath}".Replace(':', '-').ToLowerInvariant();
+    // NATS KV keys accept [A-Za-z0-9._=/-]. PI AF entity paths can contain
+    // spaces and backslashes ("element/\\Aveva-Pi\BKO_LULU_DB\BKO Test1"),
+    // so we normalize: '\' → '/', then strip anything outside the allowed set.
+    private static string BuildKey(string driverId, string entityPath)
+    {
+        var raw = $"{driverId}.{entityPath}".ToLowerInvariant();
+        var sb  = new System.Text.StringBuilder(raw.Length);
+        foreach (var c in raw)
+        {
+            if (c == '\\') sb.Append('/');
+            else if (c == ':' || c == ' ') sb.Append('-');
+            else if (char.IsLetterOrDigit(c) || c == '.' || c == '_' || c == '-' || c == '/' || c == '=')
+                sb.Append(c);
+            else
+                sb.Append('_');
+        }
+        return sb.ToString();
+    }
 }

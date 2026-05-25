@@ -1,0 +1,67 @@
+# AVEVA PI System Explorer (PI Asset Framework) — Server 1
+#
+# To onboard another PI AF server, copy this file (e.g. aveva-piaf-server2.yaml),
+# change driverId + afSystemName + afDatabase, and restart. No code changes,
+# no DI changes — the runtime picks it up via DescriptorBootstrapService.
+#
+# Forward path  : descriptor → AvevaPiAfAdapter → polls AF for template/element
+#                 changes → emits CDC events on cdc.<context>.<entity>.<changeType>
+# Reverse path  : ReverseChannelService subscribes to commandSubjects below →
+#                 decodes envelope → AvevaPiAfAdapter.ApplyAsync executes CRUD
+#                 via OSIsoft.AFSDK against the AF server.
+
+driverId: aveva-piaf-server1
+context: ctx:asset-framework
+sourceType: avevapi-af
+description: AVEVA PI System Explorer — primary AF server, templates + elements
+enabled: true
+
+connection:
+  # PI AF system name exactly as it appears in PI System Explorer's File →
+  # Connections list. From your screenshot: \\Aveva-Pi\BKO_LULU_DB ⇒
+  # afSystemName = "Aveva-Pi", afDatabase = "BKO_LULU_DB".
+  afSystemName: "${AF_SYSTEM_NAME}"
+  afDatabase:   "${AF_DATABASE}"
+  username:     "${AF_USERNAME}"           # leave blank for Windows-integrated auth
+  password:     "${AF_PASSWORD}"
+  verifySsl:    false
+
+changeDetection:
+  mode: polling
+  pollIntervalSeconds: 15                  # tightened so test iterations feel snappy
+  lookbackDuration: PT15M
+
+watch:
+  autoDiscover: false
+  entities:
+    # filter = "elementTemplate" | "element"; name "*" matches all
+    - name: "*"
+      filter: elementTemplate
+    - name: "*"
+      filter: element
+
+fieldMapping:
+  - source: uniqueId
+    target: source_id
+    isKey:  true
+  - source: modifyDate
+    target: source_modified_at
+
+nats:
+  subjectTemplate: "cdc.{context}.{entityPath}.{changeType}"
+  additionalHeaders:
+    domain: process-control
+    afServer: "${AF_SYSTEM_NAME}"
+  # Reverse channel: subjects this connector consumes for write commands.
+  # Pattern allows other systems to publish CRUD operations targeted at PI AF.
+  commandSubjects:
+    - "cmd.avevapi-af.aveva-piaf-server1.>"
+    - "cmd.canonical.elementTemplate.>"
+    - "cmd.canonical.element.>"
+  commandConsumer: aveva-piaf-server1-writer
+
+resilience:
+  maxConsecutiveFailures: 5
+  retryDelaySeconds: 10
+  backoffMultiplier: 1.5
+  maxRetryDelaySeconds: 120

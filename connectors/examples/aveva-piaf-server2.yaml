@@ -1,0 +1,41 @@
+# Demonstrates how onboarding a SECOND PI AF server is config-only:
+# everything below is identical to server1 except driverId, afSystemName,
+# afDatabase, and the command subject scope.
+
+driverId: aveva-piaf-server2
+context: ctx:asset-framework
+sourceType: avevapi-af
+description: AVEVA PI System Explorer — secondary AF server (DR / lab / staging)
+enabled: false
+
+connection:
+  afSystemName: "${AF2_SYSTEM_NAME}"
+  afDatabase:   "${AF2_DATABASE}"
+  username:     "${AF2_USERNAME}"
+  password:     "${AF2_PASSWORD}"
+
+changeDetection:
+  mode: polling
+  pollIntervalSeconds: 60
+  lookbackDuration: PT15M
+
+watch:
+  autoDiscover: false
+  entities:
+    - name: "*"
+      filter: elementTemplate
+    - name: "*"
+      filter: element
+
+nats:
+  subjectTemplate: "cdc.{context}.{entityPath}.{changeType}"
+  additionalHeaders:
+    domain: process-control
+    afServer: "${AF2_SYSTEM_NAME}"
+  commandSubjects:
+    - "cmd.avevapi-af.aveva-piaf-server2.>"
+  commandConsumer: aveva-piaf-server2-writer
+
+resilience:
+  maxConsecutiveFailures: 5
+  retryDelaySeconds: 10

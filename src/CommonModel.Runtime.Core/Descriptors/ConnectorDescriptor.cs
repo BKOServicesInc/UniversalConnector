@@ -90,6 +90,17 @@ public sealed class ConnectionConfig
 
     [YamlMember(Alias = "piServerName")]
     public string? PiServerName { get; set; }
+
+    // PI Asset Framework — system + database scope. Multiple servers are configured
+    // by creating multiple descriptor files; nothing here is server-specific code.
+    [YamlMember(Alias = "afSystemName")]
+    public string? AfSystemName { get; set; }
+
+    [YamlMember(Alias = "afDatabase")]
+    public string? AfDatabase { get; set; }
+
+    [YamlMember(Alias = "afRootPath")]
+    public string? AfRootPath { get; set; }
 }
 
 public sealed class ChangeDetectionConfig
@@ -185,6 +196,16 @@ public sealed class NatsDescriptorConfig
 
     [YamlMember(Alias = "additionalHeaders")]
     public Dictionary<string, string> AdditionalHeaders { get; set; } = new();
+
+    // Reverse-channel: subjects this connector subscribes to for write commands.
+    // The same envelope shape is reused — a command with source/type tagged for this driver
+    // is dispatched to its IWritableProtocolAdapter. Leave blank to disable writes.
+    [YamlMember(Alias = "commandSubjects")]
+    public List<string> CommandSubjects { get; set; } = new();
+
+    // Durable consumer name for the command subscription. Defaults to driverId-writer.
+    [YamlMember(Alias = "commandConsumer")]
+    public string? CommandConsumer { get; set; }
 }
 
 public sealed class ResilienceConfig

@@ -137,9 +137,13 @@ public sealed class ConnectorPipelineService : BackgroundService, IDriverLifecyc
 
             await foreach (var evt in driver.StreamChangesAsync(ct))
             {
+                _logger.LogDebug(
+                    "Pipeline receiving {ChangeType} for {DriverId}/{EntityPath} (eventId={EventId})",
+                    evt.ChangeType, evt.DriverId, evt.EntityPath, evt.EventId);
                 try
                 {
                     await _pipeline.ProcessAsync(evt, ct);
+                    _logger.LogDebug("Pipeline returned for eventId={EventId}", evt.EventId);
                 }
                 catch (Exception ex) when (!ct.IsCancellationRequested)
                 {

@@ -47,6 +47,9 @@ public static class ServiceCollectionExtensions
         services.AddHostedService<DriverLifecycleService>();
         services.AddHostedService<HealthHeartbeatService>();
 
+        // Reverse channel — drives writable adapters (e.g. AVEVA PI AF) from NATS.
+        services.AddHostedService<ReverseChannelService>();
+
         return services;
     }
 }

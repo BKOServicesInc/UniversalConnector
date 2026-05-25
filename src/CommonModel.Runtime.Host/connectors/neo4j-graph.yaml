@@ -2,7 +2,7 @@ driverId: neo4j-graph
 context: ctx:knowledge-graph
 sourceType: neo4j
 description: Knowledge graph — Neo4j Bolt polling
-enabled: true
+enabled: false
 
 connection:
   uri: bolt://localhost:7687

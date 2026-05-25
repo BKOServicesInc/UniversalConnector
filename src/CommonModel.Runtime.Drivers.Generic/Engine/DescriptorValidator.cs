@@ -6,7 +6,7 @@ public sealed class DescriptorValidator
 {
     private static readonly HashSet<string> KnownSourceTypes = new(StringComparer.OrdinalIgnoreCase)
     {
-        "postgres", "sqlserver", "neo4j", "databricks", "seeq", "avevapi", "sharepoint", "sap", "mongodb"
+        "postgres", "sqlserver", "neo4j", "databricks", "seeq", "avevapi", "avevapi-af", "sharepoint", "sap", "mongodb"
     };
 
     private static readonly Dictionary<string, HashSet<string>> SupportedModes = new(StringComparer.OrdinalIgnoreCase)
@@ -17,6 +17,7 @@ public sealed class DescriptorValidator
         ["databricks"] = new(StringComparer.OrdinalIgnoreCase) { "cdc", "polling" },
         ["seeq"]       = new(StringComparer.OrdinalIgnoreCase) { "polling" },
         ["avevapi"]    = new(StringComparer.OrdinalIgnoreCase) { "polling" },
+        ["avevapi-af"] = new(StringComparer.OrdinalIgnoreCase) { "polling" },
         ["sharepoint"] = new(StringComparer.OrdinalIgnoreCase) { "delta" },
         ["sap"]        = new(StringComparer.OrdinalIgnoreCase) { "delta" },
         ["mongodb"]    = new(StringComparer.OrdinalIgnoreCase) { "cdc", "polling" }
@@ -120,6 +121,10 @@ public sealed class DescriptorValidator
             case "avevapi":
                 if (string.IsNullOrWhiteSpace(c.BaseUrl) || string.IsNullOrWhiteSpace(c.PiServerName))
                     errors.Add("avevapi requires connection.baseUrl + connection.piServerName");
+                break;
+            case "avevapi-af":
+                if (string.IsNullOrWhiteSpace(c.AfSystemName) || string.IsNullOrWhiteSpace(c.AfDatabase))
+                    errors.Add("avevapi-af requires connection.afSystemName + connection.afDatabase");
                 break;
             case "sharepoint":
                 if (string.IsNullOrWhiteSpace(c.TenantId) || string.IsNullOrWhiteSpace(c.ClientId) ||

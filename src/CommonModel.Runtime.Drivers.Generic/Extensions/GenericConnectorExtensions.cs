@@ -24,6 +24,7 @@ public static class GenericConnectorExtensions
         services.AddSingleton<DescriptorStore>();
         services.AddSingleton<FieldMapper>();
         services.AddSingleton<AdapterRegistry>();
+        services.AddSingleton<WritableAdapterRegistry>();
 
         // Protocol adapters
         services.AddSingleton<IProtocolAdapter, PostgresAdapter>();
@@ -31,6 +32,11 @@ public static class GenericConnectorExtensions
         services.AddSingleton<IProtocolAdapter, Neo4jAdapter>();
         services.AddSingleton<IProtocolAdapter, DatabricksAdapter>();
         services.AddSingleton<IProtocolAdapter, MongoDbAdapter>();
+
+        // AVEVA PI System Explorer (AF) — bidirectional. SourceType = "avevapi-af".
+        // Each AF server is configured via its own descriptor yaml — no code change.
+        services.AddSingleton<AvevaPiAfAdapter>();
+        services.AddSingleton<IProtocolAdapter>(sp => sp.GetRequiredService<AvevaPiAfAdapter>());
 
         // HTTP-based adapters registered with distinct source type names
         services.AddSingleton<IProtocolAdapter>(sp =>

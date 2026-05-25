@@ -2,7 +2,7 @@ driverId: mongodb-assets
 context: ctx:asset-management
 sourceType: mongodb
 description: MongoDB assets database — polling
-enabled: true
+enabled: false
 
 connection:
   uri: "mongodb://localhost:27017"

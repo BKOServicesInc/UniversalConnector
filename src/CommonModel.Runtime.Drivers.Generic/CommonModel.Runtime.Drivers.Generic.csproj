@@ -15,6 +15,15 @@
     <PackageReference Include="System.Composition" Version="8.0.0" />
     <PackageReference Include="System.Data.Odbc" Version="10.0.7" />
     <PackageReference Include="YamlDotNet" Version="17.1.0" />
+
+    <!--
+      AVEVA PI AF SDK — the official NuGet package targets net8.0 and bundles
+      every Aveva/OSIsoft DLL the SDK needs (PI.IdentityModel, PI.Net, PI
+      Configuration, analysis rules, data-reference plug-ins, …). On .NET 10
+      these get copied into the host's bin folder automatically, so no on-disk
+      probe / GAC fallback is required.
+    -->
+    <PackageReference Include="Aveva.AFSDK" Version="3.2.0.52" />
   </ItemGroup>
 
   <PropertyGroup>
