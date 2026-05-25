@@ -6,10 +6,18 @@
       "dotnetRunMessages": true,
       "environmentVariables": {
         "DOTNET_ENVIRONMENT": "Development",
-        "Nats__Servers__0": "nats://localhost:4222",
+        "Nats__Url": "nats://localhost:4222",
         "GenericConnector__DescriptorDirectory": "connectors",
         "GenericConnector__FailOnDescriptorError": "false",
-        "PostgresSink__ConnectionString": "Host=localhost;Port=5432;Database=cdcdb;Username=postgres;Password=12345"
+        "PostgresSink__ConnectionString": "Host=localhost;Port=5432;Database=cdcdb;Username=postgres;Password=12345",
+        "AF_SYSTEM_NAME": "Aveva-Pi",
+        "AF_DATABASE": "BKO_LULU_DB",
+        "AF_USERNAME": "aveva-pi",
+        "AF_PASSWORD": "O1p!77AU_M|qn&Ql",
+        "AF2_SYSTEM_NAME": "Aveva-Pi",
+        "AF2_DATABASE": "BKO_LULU_DB_2",
+        "AF2_USERNAME": "aveva-pi",
+        "AF2_PASSWORD": "O1p!77AU_M|qn&Ql"
       }
     }
   }

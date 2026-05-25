@@ -15,7 +15,10 @@ public class ConnectorOptions
 
 public class NatsOptions
 {
-    public string[] Servers { get; set; } = ["nats://localhost:4222"];
+    // Single-URL form (preferred). When set, takes precedence over Servers.
+    public string? Url { get; set; }
+    // Multi-URL form retained for clustered deployments and back-compat.
+    public string[] Servers { get; set; } = ["nats://nats:4222"];
     public string SubjectPrefix { get; set; } = "cdc";
     public bool UseJetStream { get; set; } = true;
     public string DlqSubjectPrefix { get; set; } = "cdc.dlq";

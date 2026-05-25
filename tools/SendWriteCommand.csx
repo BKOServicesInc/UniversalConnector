@@ -40,7 +40,7 @@ env.Metadata["targetDriverId"] = "aveva-piaf-server1";
 
 var subject = $"cmd.avevapi-af.aveva-piaf-server1.elementTemplate.{changeType.ToLowerInvariant()}";
 
-var conn = new NatsConnection(NatsOpts.Default with { Url = "nats://localhost:4222" });
+var conn = new NatsConnection(NatsOpts.Default with { Url = "nats://nats:4222" });
 try
 {
     await conn.ConnectAsync();

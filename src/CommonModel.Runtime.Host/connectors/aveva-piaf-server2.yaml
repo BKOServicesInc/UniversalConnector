@@ -1,0 +1,61 @@
+# AVEVA PI System Explorer (PI Asset Framework) — Server 2
+#
+# Joins server1 in a bidirectional mirror mesh: both servers subscribe to the
+# canonical fanout subjects (cmd.canonical.element.>, cmd.canonical.elementTemplate.>)
+# and apply every command they see — except commands whose envelope metadata
+# carries originDriverId == this driver. That echo-suppression check lives in
+# ReverseChannelService.ToCommand. Publishers republishing CDC → command MUST
+# stamp originDriverId for the loop break to work.
+#
+# Adding a third AF server later: copy this file, change driverId, AF connection
+# vars, and the direct command subject. The canonical subjects stay identical.
+
+driverId: aveva-piaf-server2
+context: ctx:asset-framework
+sourceType: avevapi-af
+description: AVEVA PI System Explorer — secondary AF server (mirror peer of server1)
+enabled: true
+
+connection:
+  afSystemName: "${AF2_SYSTEM_NAME}"
+  afDatabase:   "${AF2_DATABASE}"
+  username:     "${AF2_USERNAME}"           # leave blank for Windows-integrated auth
+  password:     "${AF2_PASSWORD}"
+  verifySsl:    false
+
+changeDetection:
+  mode: polling
+  pollIntervalSeconds: 15
+  lookbackDuration: PT15M
+
+watch:
+  autoDiscover: false
+  entities:
+    - name: "*"
+      filter: elementTemplate
+    - name: "*"
+      filter: element
+
+fieldMapping:
+  - source: uniqueId
+    target: source_id
+    isKey:  true
+  - source: modifyDate
+    target: source_modified_at
+
+nats:
+  subjectTemplate: "cdc.{context}.{entityPath}.{changeType}"
+  additionalHeaders:
+    domain: process-control
+    afServer: "${AF2_SYSTEM_NAME}"
+  commandSubjects:
+    - "cmd.avevapi-af.aveva-piaf-server2.>"   # direct, targeted writes only to this server
+    - "cmd.canonical.elementTemplate.>"        # canonical fanout — mirror mesh
+    - "cmd.canonical.element.>"                # canonical fanout — mirror mesh
+  commandConsumer: aveva-piaf-server2-writer
+
+resilience:
+  maxConsecutiveFailures: 5
+  retryDelaySeconds: 10
+  backoffMultiplier: 1.5
+  maxRetryDelaySeconds: 120

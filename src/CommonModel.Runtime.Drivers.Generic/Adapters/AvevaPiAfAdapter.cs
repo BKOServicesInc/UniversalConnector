@@ -12,6 +12,7 @@
 using Microsoft.Extensions.Logging;
 using OSIsoft.AF;
 using OSIsoft.AF.Asset;
+using OSIsoft.AF.PI;
 using System.IO;
 using System.Runtime.CompilerServices;
 using System.Text;
@@ -26,10 +27,17 @@ namespace CommonModel.Runtime.Drivers.Generic.Adapters;
 public sealed class AvevaPiAfAdapter : BaseProtocolAdapter, IWritableProtocolAdapter
 {
     public const string SourceTypeName    = "avevapi-af";
-    public const string EntityTypeTemplate = "elementTemplate";
-    public const string EntityTypeElement  = "element";
+    public const string EntityTypeTemplate          = "elementTemplate";
+    public const string EntityTypeElement           = "element";
+    public const string EntityTypeAttribute         = "attribute";
+    public const string EntityTypeAttributeTemplate = "attributeTemplate";
+    public const string EntityTypePiPoint           = "piPoint";
     public const string ReplicaSessionHeader = "replicaSession";
     private const string CookieEntityPath = "afcookie";
+
+    // PI Data Archive (PIServer) connections — separate from AF. Resolved
+    // lazily on first piPoint operation; one PIServer per descriptor.
+    private readonly Dictionary<string, PIServer> _piServers = new(StringComparer.OrdinalIgnoreCase);
 
     private readonly ILogger<AvevaPiAfAdapter> _logger;
     private readonly ICheckpointStore _checkpoints;
@@ -59,7 +67,14 @@ public sealed class AvevaPiAfAdapter : BaseProtocolAdapter, IWritableProtocolAda
     public override string SourceType => SourceTypeName;
 
     public IReadOnlyList<string> SupportedEntityTypes =>
-        new[] { EntityTypeTemplate, EntityTypeElement };
+        new[]
+        {
+            EntityTypeTemplate,
+            EntityTypeElement,
+            EntityTypeAttribute,
+            EntityTypeAttributeTemplate,
+            EntityTypePiPoint
+        };
 
     // ─── Open / close ────────────────────────────────────────────────────────
 
@@ -149,6 +164,11 @@ public sealed class AvevaPiAfAdapter : BaseProtocolAdapter, IWritableProtocolAda
             try { sys.Disconnect(); } catch { /* swallow */ }
         }
         _systems.Clear();
+        foreach (var srv in _piServers.Values)
+        {
+            try { srv.Disconnect(); } catch { /* swallow */ }
+        }
+        _piServers.Clear();
         return Task.CompletedTask;
     }
 
@@ -375,6 +395,26 @@ public sealed class AvevaPiAfAdapter : BaseProtocolAdapter, IWritableProtocolAda
                     }
                 };
             }
+            case AFIdentity.Attribute when watchTypes.Contains(EntityTypeAttribute):
+            {
+                if (changeType == ChangeType.Delete)
+                    return DeletedRecord(EntityTypeAttribute, info, ts);
+                var attr = info.FindObject(db.PISystem, autoLoad: true) as AFAttribute;
+                if (attr is null) return null;
+                var ownerPath = attr.Element?.GetPath() ?? attr.Template?.Name ?? "";
+                return new RawChangeRecord
+                {
+                    EntityPath      = $"{EntityTypeAttribute}/{ownerPath}/{attr.Name}",
+                    ChangeType      = changeType.Value,
+                    SourceTimestamp = ts,
+                    Fields          = BuildAttributeFields(attr),
+                    AdapterMetadata = new Dictionary<string, string>
+                    {
+                        ["source"]     = SourceTypeName,
+                        ["entityType"] = EntityTypeAttribute
+                    }
+                };
+            }
         }
         return null;
     }
@@ -427,6 +467,27 @@ public sealed class AvevaPiAfAdapter : BaseProtocolAdapter, IWritableProtocolAda
         catch { return null; }
     }
 
+    private static Dictionary<string, object?> BuildAttributeFields(AFAttribute a)
+    {
+        string? value;
+        try   { value = a.GetValue()?.Value?.ToString(); }
+        catch { value = null; }
+
+        return new Dictionary<string, object?>
+        {
+            ["name"]                 = a.Name,
+            ["description"]          = a.Description,
+            ["type"]                 = a.Type?.Name,
+            ["uom"]                  = a.DefaultUOM?.Abbreviation,
+            ["value"]                = value,
+            ["dataReferencePlugIn"]  = a.DataReferencePlugIn?.Name,
+            ["configString"]         = a.ConfigString,
+            ["element"]              = a.Element?.GetPath(),
+            ["template"]              = a.Template?.Name,
+            ["uniqueId"]             = a.UniqueID.ToString()
+        };
+    }
+
     private static Dictionary<string, object?> BuildElementFields(AFElement e)
     {
         var values = new Dictionary<string, object?>();
@@ -456,6 +517,7 @@ public sealed class AvevaPiAfAdapter : BaseProtocolAdapter, IWritableProtocolAda
         {
             set.Add(EntityTypeElement);
             set.Add(EntityTypeTemplate);
+            set.Add(EntityTypeAttribute);
             return set;
         }
         foreach (var e in d.Watch.Entities)
@@ -469,6 +531,13 @@ public sealed class AvevaPiAfAdapter : BaseProtocolAdapter, IWritableProtocolAda
         ConnectorDescriptor descriptor, WriteCommand command, CancellationToken ct)
     {
         await Task.Yield();
+
+        // PI Data Archive (piPoint) commits directly via PIPoint.SaveAttributes —
+        // it doesn't participate in the AF database CheckIn / UndoCheckOut
+        // transaction. Branch the lifecycle so a PI Point failure can't leak
+        // into the AF transaction buffer (and vice versa).
+        if (string.Equals(command.EntityType, EntityTypePiPoint, StringComparison.OrdinalIgnoreCase))
+            return ApplyPiPointSafe(descriptor, command);
 
         AFDatabase? db = null;
         try
@@ -485,9 +554,11 @@ public sealed class AvevaPiAfAdapter : BaseProtocolAdapter, IWritableProtocolAda
             //      so the next command starts from a clean transaction.
             var result = command.EntityType switch
             {
-                EntityTypeTemplate => ApplyTemplate(db, command),
-                EntityTypeElement  => ApplyElement (db, command),
-                _                  => WriteResult.Fail(
+                EntityTypeTemplate          => ApplyTemplate         (db, command),
+                EntityTypeElement           => ApplyElement          (db, command),
+                EntityTypeAttribute         => ApplyAttribute        (db, command),
+                EntityTypeAttributeTemplate => ApplyAttributeTemplate(db, command),
+                _                           => WriteResult.Fail(
                     $"Unsupported entityType '{command.EntityType}'. " +
                     $"Supported: {string.Join(", ", SupportedEntityTypes)}")
             };
@@ -523,6 +594,29 @@ public sealed class AvevaPiAfAdapter : BaseProtocolAdapter, IWritableProtocolAda
             _logger.LogError(ex, "PI AF write failed for {EntityType} {Pk}",
                 command.EntityType, string.Join(",", command.PrimaryKey.Values));
             if (db is not null) TryUndoCheckOut(db, command.CorrelationId);
+            return WriteResult.Fail(ex.Message);
+        }
+    }
+
+    private WriteResult ApplyPiPointSafe(ConnectorDescriptor descriptor, WriteCommand command)
+    {
+        try
+        {
+            var result = ApplyPiPoint(descriptor, command);
+            if (!result.Success) return result;
+            var sid = Ulid.NewUlid().ToString();
+            _selfWriteSessions.Add(sid);
+            _logger.LogInformation(
+                "PI Data Archive ► {Op} {EntityType} {Name} (corr={Corr}, replicaSession={Sid})",
+                command.Operation, command.EntityType,
+                command.PrimaryKey.TryGetValue("name", out var n) ? n : "?",
+                command.CorrelationId, sid);
+            return WriteResult.Ok(sid, result.Fields);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "PI Data Archive write failed for {EntityType} {Pk}",
+                command.EntityType, string.Join(",", command.PrimaryKey.Values));
             return WriteResult.Fail(ex.Message);
         }
     }
@@ -578,6 +672,11 @@ public sealed class AvevaPiAfAdapter : BaseProtocolAdapter, IWritableProtocolAda
     {
         if (fields.TryGetValue("description", out var desc))
             template.Description = desc?.ToString() ?? "";
+
+        // Broker bootstrap PATCHes legacy templates to AllowElementToExtend=true
+        // so Sensor_<tag> attributes can be added to element instances at restore.
+        if (fields.TryGetValue("allowElementToExtend", out var allow) && allow is bool allowBool)
+            template.AllowElementToExtend = allowBool;
 
         if (fields.TryGetValue("baseTemplate", out var bt) && bt is string baseName && baseName.Length > 0)
             template.BaseTemplate = template.Database.ElementTemplates[baseName];
@@ -660,6 +759,15 @@ public sealed class AvevaPiAfAdapter : BaseProtocolAdapter, IWritableProtocolAda
 
     private static void ApplyElementFields(AFElement element, IReadOnlyDictionary<string, object?> fields)
     {
+        // Identity rename: when `newName` is supplied and differs, change the
+        // AF Element Name in-place. PSE's General-tab Name and every path-derived
+        // WebId change after CheckIn, so downstream callers must re-resolve.
+        if (fields.TryGetValue("newName", out var nn) && nn is string newName &&
+            newName.Length > 0 && !string.Equals(newName, element.Name, StringComparison.Ordinal))
+        {
+            element.Name = newName;
+        }
+
         if (fields.TryGetValue("description", out var desc))
             element.Description = desc?.ToString() ?? "";
 
@@ -674,6 +782,318 @@ public sealed class AvevaPiAfAdapter : BaseProtocolAdapter, IWritableProtocolAda
                 catch { /* attribute may be PI-bound — skip silently */ }
             }
         }
+    }
+
+    // ─── Reverse path: AF attribute CRUD (per-element) ──────────────────────
+    //
+    // Element-level attribute CRUD is what the broker's restore_aveva path
+    // uses for ``Sensor_<tag>`` attributes (PI-Point-referencing AF attributes).
+    // Primary key forms:
+    //   { "elementPath": "\\sys\\db\\equip", "name": "Sensor_FE-1011" }
+    //   { "elementName": "equip-1", "name": "TagDesc" }
+    //
+    // Create payload mirrors PI Web API's ``POST /elements/{wid}/attributes``:
+    //   { description, type, defaultValue, uom, dataReferencePlugIn, configString, value }
+    //
+    // When `dataReferencePlugIn == "PI Point"`, `configString` carries the
+    // ``\\<DataServer>\<pointName>`` reference and the attribute resolves
+    // values transparently through PI Data Archive.
+    private static WriteResult ApplyAttribute(AFDatabase db, WriteCommand cmd)
+    {
+        var attrName = ResolveName(cmd, "name");
+        var element  = ResolveElementForAttribute(db, cmd);
+        if (element is null)
+            return WriteResult.Fail(
+                $"Attribute target element not found (primaryKey: {string.Join(",", cmd.PrimaryKey.Keys)}).");
+
+        var existing = element.Attributes[attrName];
+
+        switch (cmd.Operation)
+        {
+            case WriteOperation.Create:
+                if (existing is not null)
+                    return WriteResult.Fail($"Attribute '{attrName}' already exists on '{element.GetPath()}'.");
+                var created = element.Attributes.Add(attrName);
+                ApplyAttributeFields(created, cmd.Fields);
+                return WriteResult.Ok("", new Dictionary<string, object?>
+                {
+                    ["uniqueId"] = created.UniqueID.ToString(),
+                    ["element"]  = element.GetPath()
+                });
+
+            case WriteOperation.Update:
+                if (existing is null)
+                    return WriteResult.Fail($"Attribute '{attrName}' not found on '{element.GetPath()}'.");
+                ApplyAttributeFields(existing, cmd.Fields);
+                return WriteResult.Ok("", new Dictionary<string, object?>
+                {
+                    ["uniqueId"] = existing.UniqueID.ToString(),
+                    ["element"]  = element.GetPath()
+                });
+
+            case WriteOperation.Delete:
+                if (existing is null) return WriteResult.Ok("");   // idempotent
+                element.Attributes.Remove(existing);
+                return WriteResult.Ok("");
+
+            default:
+                return WriteResult.Fail($"Unknown operation {cmd.Operation}");
+        }
+    }
+
+    private static AFElement? ResolveElementForAttribute(AFDatabase db, WriteCommand cmd)
+    {
+        if (cmd.PrimaryKey.TryGetValue("elementPath", out var ep) && ep is string epath && epath.Length > 0)
+            return AFObject.FindObject(epath, db) as AFElement;
+        if (cmd.PrimaryKey.TryGetValue("elementName", out var en) && en is string ename && ename.Length > 0)
+            return db.Elements[ename];
+        if (cmd.Fields.TryGetValue("element", out var fe) && fe is string fpath && fpath.Length > 0)
+            return AFObject.FindObject(fpath, db) as AFElement;
+        return null;
+    }
+
+    private static void ApplyAttributeFields(AFAttribute attr, IReadOnlyDictionary<string, object?> fields)
+    {
+        if (fields.TryGetValue("description", out var desc))
+            attr.Description = desc?.ToString() ?? "";
+
+        if (fields.TryGetValue("type", out var t) && t is string typeName)
+            attr.Type = Type.GetType(typeName) ?? attr.Type;
+
+        if (fields.TryGetValue("uom", out var uom) && uom is string uomAbbrev && uomAbbrev.Length > 0)
+            attr.DefaultUOM = attr.Database?.PISystem.UOMDatabase.UOMs[uomAbbrev];
+
+        // Order matters: set DataReferencePlugIn first, then ConfigString — the
+        // PlugIn parses ConfigString and rejects values it doesn't recognise.
+        if (fields.TryGetValue("dataReferencePlugIn", out var drp) && drp is string drpName && drpName.Length > 0)
+            attr.DataReferencePlugIn = attr.PISystem.DataReferencePlugIns[drpName];
+
+        if (fields.TryGetValue("configString", out var cs) && cs is string cstr)
+            attr.ConfigString = cstr;
+
+        if (fields.TryGetValue("defaultValue", out var dv) && attr.DataReferencePlugIn is null)
+            try { attr.SetValue(new AFValue(dv)); } catch { /* incompatible literal */ }
+
+        if (fields.TryGetValue("value", out var v) && attr.DataReferencePlugIn is null)
+            try { attr.SetValue(new AFValue(v)); } catch { /* incompatible literal */ }
+    }
+
+    // ─── Reverse path: attribute template CRUD (per-template) ───────────────
+    //
+    // Per-attribute-template ops on an existing element template. PK:
+    //   { "templateName": "BkoPump", "name": "AreaId" }
+    //
+    // The broker's bootstrap uses ``DELETE /attributetemplates/{wid}`` to
+    // drop legacy attribute templates (e.g. ``AreaId``) — this is the
+    // adapter-side equivalent.
+    private static WriteResult ApplyAttributeTemplate(AFDatabase db, WriteCommand cmd)
+    {
+        if (!cmd.PrimaryKey.TryGetValue("templateName", out var tplObj) ||
+            tplObj is not string templateName || templateName.Length == 0)
+            return WriteResult.Fail("attributeTemplate primaryKey requires 'templateName'.");
+
+        var template = db.ElementTemplates[templateName];
+        if (template is null)
+            return WriteResult.Fail($"Template '{templateName}' not found.");
+
+        var attrName = ResolveName(cmd, "name");
+        var existing = template.AttributeTemplates[attrName];
+
+        switch (cmd.Operation)
+        {
+            case WriteOperation.Create:
+                if (existing is not null)
+                    return WriteResult.Fail($"Attribute template '{attrName}' already exists on '{templateName}'.");
+                var created = template.AttributeTemplates.Add(attrName);
+                ApplyAttributeTemplateFields(created, cmd.Fields);
+                return WriteResult.Ok("", new Dictionary<string, object?>
+                {
+                    ["uniqueId"] = created.UniqueID.ToString(),
+                    ["template"] = templateName
+                });
+
+            case WriteOperation.Update:
+                if (existing is null)
+                    return WriteResult.Fail($"Attribute template '{attrName}' not found on '{templateName}'.");
+                ApplyAttributeTemplateFields(existing, cmd.Fields);
+                return WriteResult.Ok("", new Dictionary<string, object?>
+                {
+                    ["uniqueId"] = existing.UniqueID.ToString(),
+                    ["template"] = templateName
+                });
+
+            case WriteOperation.Delete:
+                if (existing is null) return WriteResult.Ok("");
+                template.AttributeTemplates.Remove(existing);
+                return WriteResult.Ok("");
+
+            default:
+                return WriteResult.Fail($"Unknown operation {cmd.Operation}");
+        }
+    }
+
+    private static void ApplyAttributeTemplateFields(AFAttributeTemplate attr, IReadOnlyDictionary<string, object?> fields)
+    {
+        if (fields.TryGetValue("description", out var desc))
+            attr.Description = desc?.ToString() ?? "";
+        if (fields.TryGetValue("type", out var t) && t is string typeName)
+            attr.Type = Type.GetType(typeName) ?? attr.Type;
+        if (fields.TryGetValue("defaultValue", out var dv))
+            try { attr.SetValue(dv, null); } catch { /* incompatible literal */ }
+        if (fields.TryGetValue("uom", out var uom) && uom is string uomAbbrev && uomAbbrev.Length > 0)
+            attr.DefaultUOM = attr.Database?.PISystem.UOMDatabase.UOMs[uomAbbrev];
+        if (fields.TryGetValue("isConfig", out var ic) && ic is bool isConfig)
+            attr.IsConfigurationItem = isConfig;
+    }
+
+    // ─── Reverse path: PI Data Archive (PI Point) CRUD ──────────────────────
+    //
+    // PI Points live in PI Data Archive, not AF. The AF SDK exposes them via
+    // OSIsoft.AF.PI.PIServer / PIPoint. The data server name comes from
+    // ``connection.piServerName`` in the descriptor; when blank, we fall back
+    // to the AF system name (typical PI single-host installs).
+    //
+    // PI Point ops commit immediately — no db.CheckIn() — so the lifecycle
+    // is branched at ApplyAsync.
+    private WriteResult ApplyPiPoint(ConnectorDescriptor descriptor, WriteCommand cmd)
+    {
+        var server = ResolvePiServer(descriptor);
+        var name = ResolveName(cmd, "name");
+        var existing = TryFindPiPoint(server, name);
+
+        switch (cmd.Operation)
+        {
+            case WriteOperation.Create:
+                if (existing is not null)
+                    return WriteResult.Fail($"PI Point '{name}' already exists on '{server.Name}'.");
+                var attrs = BuildPiPointCreateAttributes(cmd.Fields);
+                // PIServer.CreatePIPoint(name, IDictionary<string, object>) creates the
+                // PI Point and applies the initial attribute set in one round-trip.
+                var created = server.CreatePIPoint(name, attrs);
+                return WriteResult.Ok("", new Dictionary<string, object?>
+                {
+                    ["id"]     = created.ID,
+                    ["name"]   = created.Name,
+                    ["server"] = server.Name
+                });
+
+            case WriteOperation.Update:
+                if (existing is null)
+                    return WriteResult.Fail($"PI Point '{name}' not found on '{server.Name}'.");
+                ApplyPiPointFields(existing, cmd.Fields);
+                return WriteResult.Ok("", new Dictionary<string, object?>
+                {
+                    ["id"]     = existing.ID,
+                    ["name"]   = existing.Name,
+                    ["server"] = server.Name
+                });
+
+            case WriteOperation.Delete:
+                if (existing is null) return WriteResult.Ok("");
+                server.DeletePIPoint(name);
+                return WriteResult.Ok("");
+
+            default:
+                return WriteResult.Fail($"Unknown operation {cmd.Operation}");
+        }
+    }
+
+    private static PIPoint? TryFindPiPoint(PIServer server, string name)
+    {
+        try   { return PIPoint.FindPIPoint(server, name); }
+        catch { return null; }
+    }
+
+    // Maps the broker's PI Web API field names to PI Point attribute names.
+    // PI Point's native attribute names are case-sensitive and lower-cased
+    // (descriptor, pointtype, pointclass, engunits, …) — easy to get wrong.
+    private static IDictionary<string, object> BuildPiPointCreateAttributes(
+        IReadOnlyDictionary<string, object?> fields)
+    {
+        var attrs = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+
+        void Add(string piName, object? value)
+        {
+            if (value is null) return;
+            var s = value.ToString();
+            if (string.IsNullOrEmpty(s)) return;
+            attrs[piName] = s;
+        }
+
+        fields.TryGetValue("descriptor", out var desc);          Add("descriptor", desc);
+        fields.TryGetValue("engineeringUnits", out var units);   Add("engunits",   units);
+        fields.TryGetValue("pointType", out var ptype);          Add("pointtype",  ptype ?? "Float32");
+        fields.TryGetValue("pointClass", out var pclass);        Add("pointclass", pclass ?? "classic");
+
+        // extraAttributes is a free-form map for callers that need to set
+        // additional native PI Point attributes (e.g. zero/span, compressing,
+        // step) at creation time.
+        if (fields.TryGetValue("extraAttributes", out var extra) &&
+            extra is IReadOnlyDictionary<string, object?> extras)
+        {
+            foreach (var (k, v) in extras) Add(k, v);
+        }
+        return attrs;
+    }
+
+    private static void ApplyPiPointFields(PIPoint point, IReadOnlyDictionary<string, object?> fields)
+    {
+        var changed = new List<string>();
+
+        void Set(string piName, object? value)
+        {
+            if (value is null) return;
+            point.SetAttribute(piName, value.ToString() ?? "");
+            changed.Add(piName);
+        }
+
+        if (fields.TryGetValue("descriptor", out var desc))         Set("descriptor", desc);
+        if (fields.TryGetValue("engineeringUnits", out var units))  Set("engunits",   units);
+        if (fields.TryGetValue("pointType", out var ptype) && ptype is string pt && pt.Length > 0)
+            Set("pointtype", pt);
+
+        if (fields.TryGetValue("extraAttributes", out var extra) &&
+            extra is IReadOnlyDictionary<string, object?> extras)
+        {
+            foreach (var (k, v) in extras) Set(k, v);
+        }
+
+        if (changed.Count == 0) return;
+        // PIPoint.SaveAttributes(params string[]) flushes the in-memory
+        // SetAttribute calls to PI Data Archive in one round-trip.
+        point.SaveAttributes(changed.ToArray());
+    }
+
+    private PIServer ResolvePiServer(ConnectorDescriptor descriptor)
+    {
+        // PI Data Archive server name comes from descriptor.connection.piServerName;
+        // fall back to AfSystemName for the common single-host PI install.
+        var name = descriptor.Connection.PiServerName
+                   ?? descriptor.Connection.AfSystemName
+                   ?? descriptor.Connection.Host
+                   ?? throw new InvalidOperationException(
+                       "connection.piServerName (or afSystemName/host) is required for piPoint ops");
+
+        if (_piServers.TryGetValue(name, out var cached) && cached.ConnectionInfo.IsConnected)
+            return cached;
+
+        var servers = new PIServers();
+        var server = servers[name]
+            ?? throw new InvalidOperationException(
+                $"PI Data Archive server '{name}' is not registered on this host. " +
+                $"Add it via PI System Explorer (Connections → Servers) or PI SDK Utility.");
+
+        var c = descriptor.Connection;
+        if (!string.IsNullOrWhiteSpace(c.Username))
+            server.Connect(new System.Net.NetworkCredential(c.Username, c.Password ?? ""));
+        else
+            server.Connect();
+
+        _piServers[name] = server;
+        _logger.LogInformation(
+            "Connected to PI Data Archive '{Server}' (version: {Version})",
+            server.Name, server.ServerVersion);
+        return server;
     }
 
     // ─── Validation ─────────────────────────────────────────────────────────
@@ -739,6 +1159,11 @@ public sealed class AvevaPiAfAdapter : BaseProtocolAdapter, IWritableProtocolAda
             try { sys.Disconnect(); } catch { }
         }
         _systems.Clear();
+        foreach (var srv in _piServers.Values)
+        {
+            try { srv.Disconnect(); } catch { }
+        }
+        _piServers.Clear();
         await base.DisposeAsync();
     }
 }
