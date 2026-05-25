@@ -274,19 +274,73 @@ public sealed class NatsPublisher : INatsPublisher, IAsyncDisposable
             envelope.SourceTimestamp = Timestamp.FromDateTimeOffset(evt.SourceTimestamp.Value);
 
         foreach (var (k, v) in evt.PrimaryKey)
-            envelope.PrimaryKey[k] = v?.ToString() ?? "";
+            envelope.PrimaryKey[k] = ToProtoValue(v);
 
         foreach (var (k, v) in evt.Fields)
-            envelope.Fields[k] = v?.ToString() ?? "";
+            envelope.Fields[k] = ToProtoValue(v);
 
         if (evt.PreviousFields is not null)
             foreach (var (k, v) in evt.PreviousFields)
-                envelope.PreviousFields[k] = v?.ToString() ?? "";
+                envelope.PreviousFields[k] = ToProtoValue(v);
 
         foreach (var (k, v) in evt.Metadata)
             envelope.Metadata[k] = v;
 
         return envelope;
+    }
+
+    // Convert a C# value into google.protobuf.Value so nested dictionaries
+    // and lists serialize as real JSON objects/arrays instead of being
+    // collapsed to their type name via Object.ToString().
+    internal static Value ToProtoValue(object? value)
+    {
+        switch (value)
+        {
+            case null:                              return Value.ForNull();
+            case Value already:                     return already;
+            case bool b:                            return Value.ForBool(b);
+            case string s:                          return Value.ForString(s);
+            case sbyte sb:                          return Value.ForNumber(sb);
+            case byte by:                           return Value.ForNumber(by);
+            case short sh:                          return Value.ForNumber(sh);
+            case ushort ush:                        return Value.ForNumber(ush);
+            case int i:                             return Value.ForNumber(i);
+            case uint ui:                           return Value.ForNumber(ui);
+            case long l:                            return Value.ForNumber(l);
+            case ulong ul:                          return Value.ForNumber(ul);
+            case float f:                           return Value.ForNumber(f);
+            case double d:                          return Value.ForNumber(d);
+            case decimal dec:                       return Value.ForNumber((double)dec);
+            case DateTime dt:                       return Value.ForString(dt.ToString("o"));
+            case DateTimeOffset dto:                return Value.ForString(dto.ToString("o"));
+            case Guid g:                            return Value.ForString(g.ToString());
+            case IReadOnlyDictionary<string, object?> rod:
+                return Value.ForStruct(DictToStruct(rod));
+            case IDictionary<string, object?> idict:
+                return Value.ForStruct(DictToStruct(idict));
+            case System.Collections.IDictionary nonGenericDict:
+            {
+                var s = new Struct();
+                foreach (System.Collections.DictionaryEntry kv in nonGenericDict)
+                    s.Fields[kv.Key?.ToString() ?? ""] = ToProtoValue(kv.Value);
+                return Value.ForStruct(s);
+            }
+            case System.Collections.IEnumerable list:
+            {
+                var values = new List<Value>();
+                foreach (var item in list) values.Add(ToProtoValue(item));
+                return Value.ForList(values.ToArray());
+            }
+            default:
+                return Value.ForString(value.ToString() ?? "");
+        }
+    }
+
+    private static Struct DictToStruct(IEnumerable<KeyValuePair<string, object?>> dict)
+    {
+        var s = new Struct();
+        foreach (var (k, v) in dict) s.Fields[k] = ToProtoValue(v);
+        return s;
     }
 
     private static NatsHeaders BuildHeaders(

@@ -8,6 +8,7 @@
 
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Google.Protobuf.WellKnownTypes;
 using NATS.Client.Core;
 using NATS.Client.JetStream;
 using NATS.Client.JetStream.Models;
@@ -161,11 +162,11 @@ public sealed class ReverseChannelService : BackgroundService
         var entityName  = slash > 0 ? envelope.EntityPath[(slash + 1)..] : envelope.EntityPath;
 
         var pk = new Dictionary<string, object?>();
-        foreach (var (k, v) in envelope.PrimaryKey) pk[k] = v;
+        foreach (var (k, v) in envelope.PrimaryKey) pk[k] = FromProtoValue(v);
         if (!pk.ContainsKey("name")) pk["name"] = entityName;
 
         var fields = new Dictionary<string, object?>();
-        foreach (var (k, v) in envelope.Fields) fields[k] = v;
+        foreach (var (k, v) in envelope.Fields) fields[k] = FromProtoValue(v);
 
         var metadata = new Dictionary<string, string>();
         foreach (var (k, v) in envelope.Metadata) metadata[k] = v;
@@ -191,4 +192,28 @@ public sealed class ReverseChannelService : BackgroundService
             "delete"                => WriteOperation.Delete,
             _                       => null
         };
+
+    // Convert a google.protobuf.Value back into a C# object. Inverse of
+    // NatsPublisher.ToProtoValue — used when decoding inbound write commands
+    // whose Fields / PrimaryKey carry nested objects or lists.
+    private static object? FromProtoValue(Value v)
+    {
+        return v.KindCase switch
+        {
+            Value.KindOneofCase.NullValue   => null,
+            Value.KindOneofCase.BoolValue   => v.BoolValue,
+            Value.KindOneofCase.NumberValue => v.NumberValue,
+            Value.KindOneofCase.StringValue => v.StringValue,
+            Value.KindOneofCase.StructValue => FromProtoStruct(v.StructValue),
+            Value.KindOneofCase.ListValue   => v.ListValue.Values.Select(FromProtoValue).ToList(),
+            _                               => null
+        };
+    }
+
+    private static Dictionary<string, object?> FromProtoStruct(Struct s)
+    {
+        var d = new Dictionary<string, object?>();
+        foreach (var (k, v) in s.Fields) d[k] = FromProtoValue(v);
+        return d;
+    }
 }

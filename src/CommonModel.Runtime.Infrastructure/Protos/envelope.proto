@@ -13,6 +13,7 @@ package commonmodel.runtime.v1;
 option csharp_namespace = "CommonModel.Runtime.Infrastructure.Wire";
 
 import "google/protobuf/timestamp.proto";
+import "google/protobuf/struct.proto";
 
 message Envelope {
   string event_id = 1;
@@ -23,9 +24,13 @@ message Envelope {
   string context = 6;
   string entity_path = 7;
   string change_type = 8;
-  map<string, string> primary_key = 9;
-  map<string, string> fields = 10;
-  map<string, string> previous_fields = 11;
+  // primary_key / fields / previous_fields carry polymorphic values
+  // (string, number, bool, nested object, list). Encoded as
+  // google.protobuf.Value so the protobuf-to-JSON projection emits
+  // real nested JSON instead of stringified type names.
+  map<string, google.protobuf.Value> primary_key = 9;
+  map<string, google.protobuf.Value> fields = 10;
+  map<string, google.protobuf.Value> previous_fields = 11;
   map<string, string> metadata = 12;
   int64 sequence_number = 13;
 }

@@ -15,7 +15,13 @@ public sealed class NatsConnectionFactory : IAsyncDisposable
 
     public NatsOpts BuildOpts()
     {
-        var opts = NatsOpts.Default with { Url = string.Join(",", _options.Servers) };
+        // Single-URL config (Nats:Url) takes precedence; falls back to the
+        // multi-URL Servers[] form for clustered setups.
+        var url = !string.IsNullOrWhiteSpace(_options.Url)
+            ? _options.Url
+            : string.Join(",", _options.Servers);
+
+        var opts = NatsOpts.Default with { Url = url };
 
         if (!string.IsNullOrWhiteSpace(_options.CredsFile))
             opts = opts with { AuthOpts = new NatsAuthOpts { CredsFile = _options.CredsFile } };

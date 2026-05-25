@@ -15,7 +15,7 @@ using CommonModel.Runtime.Infrastructure.Wire;
 
 var subject = Args.Count > 0 ? Args[0] : "cdc.>";
 
-var conn = new NatsConnection(NatsOpts.Default with { Url = "nats://localhost:4222" });
+var conn = new NatsConnection(NatsOpts.Default with { Url = "nats://nats:4222" });
 try
 {
     await conn.ConnectAsync();
