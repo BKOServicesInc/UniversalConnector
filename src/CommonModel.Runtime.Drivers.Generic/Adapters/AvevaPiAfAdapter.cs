@@ -762,10 +762,17 @@ public sealed class AvevaPiAfAdapter : BaseProtocolAdapter, IWritableProtocolAda
         // Identity rename: when `newName` is supplied and differs, change the
         // AF Element Name in-place. PSE's General-tab Name and every path-derived
         // WebId change after CheckIn, so downstream callers must re-resolve.
+        // `name` is accepted as an alternate new-name carrier for publishers that
+        // put the old name in primary_key.name and the new name in fields.name.
         if (fields.TryGetValue("newName", out var nn) && nn is string newName &&
             newName.Length > 0 && !string.Equals(newName, element.Name, StringComparison.Ordinal))
         {
             element.Name = newName;
+        }
+        else if (fields.TryGetValue("name", out var nv) && nv is string nameVal &&
+                 nameVal.Length > 0 && !string.Equals(nameVal, element.Name, StringComparison.Ordinal))
+        {
+            element.Name = nameVal;
         }
 
         if (fields.TryGetValue("description", out var desc))
